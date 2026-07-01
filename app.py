@@ -176,3 +176,27 @@ def display_workout_notifications():
             
             # Trigger a non-intrusive toast notification in the bottom right corner
             st.toast(f"💪 **{name}** just finished: {sets} sets x {reps} reps of {exercise} @ {weight} lbs!", icon="🎉")
+
+def get_latest_workout():
+    """Fetches the single most recent workout entry."""
+    res = supabase.table("Completions").select("*").order("id", desc=True).limit(1).execute()
+    if res.data:
+        return res.data[0]
+    return None
+
+# 6. Main App Layout Router
+
+# Run the notification checker first so it catches updates on any page rerun
+display_workout_notifications()
+
+tab1, tab2, tab3, tab4 = st.tabs(["Login", "Log Workout", "Dashboard", "Active Users"])
+with tab1:
+    login_tab()
+with tab2:
+    log_workout_tab()
+with tab3:
+    dashboard_tab()
+with tab4:
+    active_users_tab()
+
+
