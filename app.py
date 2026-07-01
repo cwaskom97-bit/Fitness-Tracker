@@ -386,3 +386,177 @@ elif st.session_state.player:
     player_dashboard()
 else:
     login_screen()
+
+import json
+import os
+from datetime import datetime, timedelta
+import ipywidgets as widgets
+from IPython.display import display, clear_output
+
+DATA_FILE = "workout_data.json"
+TIMEOUT_MINUTES = 10  # how long someone stays "active" without activity
+
+def load_data():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+data = load_data()
+active_sessions = {}  # name -> datetime of last activity
+
+def mark_active(name):
+    if name:
+        active_sessions[name] = datetime.now()
+
+def mark_inactive(name):
+    active_sessions.pop(name, None)
+
+def prune_inactive():
+    cutoff = datetime.now() - timedelta(minutes=TIMEOUT_MINUTES)
+    stale = [name for name, last_seen in active_sessions.items() if last_seen < cutoff]
+    for name in stale:
+        active_sessions.pop(name, None)
+
+# ----- Login / Logout Panel -----
+login_name_input = widgets.Text(description="Name:")
+login_button = widgets.Button(description="Log In", button_style="success")
+logout_button = widgets.Button(description="Log Out", button_style="danger")
+login_output = widgets.Output()
+
+def do_login(b):
+    with login_output:
+        clear_output()
+        name = login_name_input.value.strip()
+        if not name:
+            print("Enter a name first.")
+            return
+        mark_active(name)
+        print(f"{name} is now logged in / active.")
+
+def do_logout(b):
+    with login_output:
+        clear_output()
+        name = login_name_input.value.strip()
+        if not name:
+            print("Enter a name first.")
+            return
+        mark_inactive(name)
+        print(f"{name} logged out.")
+
+login_button.on_click(do_login)
+logout_button.on_click(do_logout)
+
+login_panel = widgets.VBox([
+    widgets.HTML("<h3>Login</h3>"),
+    login_name_input,
+    widgets.HBox([login_button, logout_button]),
+    login_output
+])
+
+# ----- Log Workout Panel (unchanged) -----
+name_input = widgets.Text(description="Name:")
+exercise_input = widgets.Text(description="Exercise:")
+sets_input = widgets.IntText(description="Sets:", value=3)
+reps_input = widgets.IntText(description="Reps:", value=10)
+weight_input = widgets.FloatText(description="Weight (lb):", value=0)
+duration_input = widgets.FloatText(description="Duration (min):", value=0)
+log_button = widgets.Button(description="Log Workout", button_style="success")
+log_output = widgets.Output()
+
+def log_workout(b):
+    with log_output:
+        clear_output()
+        name = name_input.value.strip()
+        if not name:
+            print("Enter a name first.")
+            return
+        entry = {
+            "exercise": exercise_input.value.strip() or "Unspecified",
+            "sets": sets_input.value,
+            "reps": reps_input.value,
+            "weight": weight_input.value,
+            "duration_min": duration_input.value,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        data.setdefault(name, []).append(entry)
+        save_data(data)
+        mark_active(name)  # logging a workout counts as activity
+        print(f"Logged for {name}: {entry}")
+
+log_button.on_click(log_workout)
+
+log_panel = widgets.VBox([
+    widgets.HTML("<h3>Log a Workout</h3>"),
+    name_input, exercise_input, sets_input, reps_input,
+    weight_input, duration_input, log_button, log_output
+])
+
+# ----- Dashboard Panel (everyone's full stats, regardless of active status) -----
+dash_button = widgets.Button(description="Refresh Dashboard", button_style="info")
+dash_output = widgets.Output()
+
+def show_dashboard(b=None):
+    with dash_output:
+        clear_output()
+        data_now = load_data()
+        if not data_now:
+            print("No workouts logged yet.")
+            return
+        for person, entries in data_now.items():
+            total_sets = sum(e["sets"] for e in entries)
+            total_reps = sum(e["sets"] * e["reps"] for e in entries)
+            total_volume = sum(e["sets"] * e["reps"] * e["weight"] for e in entries)
+            total_duration = sum(e["duration_min"] for e in entries)
+            print(f"=== {person} ===")
+            print(f"  Workouts logged: {len(entries)}")
+            print(f"  Total sets: {total_sets}")
+            print(f"  Total reps: {total_reps}")
+            print(f"  Total volume (sets x reps x weight): {total_volume:.1f}")
+            print(f"  Total duration: {total_duration:.1f} min")
+            print()
+
+dash_button.on_click(show_dashboard)
+
+dashboard_panel = widgets.VBox([
+    widgets.HTML("<h3>Dashboard — Everyone's Stats</h3>"),
+    dash_button, dash_output
+])
+
+# ----- Active Users Panel (only currently online) -----
+users_button = widgets.Button(description="Refresh Active Users", button_style="warning")
+users_output = widgets.Output()
+
+def show_active_users(b=None):
+    prune_inactive()
+    with users_output:
+        clear_output()
+        if not active_sessions:
+            print("No one is currently active.")
+            return
+        print(f"=== {len(active_sessions)} user(s) currently active (last {TIMEOUT_MINUTES} min) ===\n")
+        for person, last_seen in sorted(active_sessions.items()):
+            mins_ago = (datetime.now() - last_seen).seconds // 60
+            print(f"{person} — active {mins_ago} min ago")
+
+users_button.on_click(show_active_users)
+
+users_panel = widgets.VBox([
+    widgets.HTML("<h3>Who's Active Right Now</h3>"),
+    users_button, users_output
+])
+
+# ----- Assemble tabs -----
+tabs = widgets.Tab(children=[login_panel, log_panel, dashboard_panel, users_panel])
+tabs.set_title(0, "Login")
+tabs.set_title(1, "Log Workout")
+tabs.set_title(2, "Dashboard")
+tabs.set_title(3, "Active Users")
+
+display(tabs)
+show_dashboard()
+show_active_users()
