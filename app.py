@@ -82,8 +82,8 @@ if "data_now" not in st.session_state:
 if name_input not in st.session_state.data_now:
     st.session_state.data_now[name_input] = []
 
-st.session_state.data_now[name_input].append(entry)save_data(data_now)
-st.session_state.active_users.add(name_input)
+st.session_state.data_now[name_input].append(entry)
+save_data(st.session_state.data_now)st.session_state.active_users.add(name_input)
 
 st.success(f"Logged for {name_input}: {entry['exercise']} ({entry['sets']}x{entry['reps']})")
 
