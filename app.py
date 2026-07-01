@@ -36,7 +36,7 @@ if "current_user" not in st.session_state:
 # ---------- Data helpers matching your real database ----------
 def mark_active(name):
 # Maps to your actual 'tasks' table columns: task_name and task_date
-try:
+    try:
 supabase.table("tasks").upsert({
 "task_name": name,
 "task_date": datetime.utcnow().date().isoformat()
