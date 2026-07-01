@@ -390,8 +390,8 @@ else:
 import json
 import os
 from datetime import datetime, timedelta
-import ipywidgets as widgets
-from IPython.display import display, clear_output
+#import ipywidgets as widgets
+#from IPython.display import display, clear_output
 
 DATA_FILE = "workout_data.json"
 TIMEOUT_MINUTES = 10  # how long someone stays "active" without activity
