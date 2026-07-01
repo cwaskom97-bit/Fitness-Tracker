@@ -46,7 +46,7 @@ if st.button("Log Workout", type="primary"):
     if not name_input:
         st.error("Enter a name first.")
 else:
-entry = {
+    entry = {
 "exercise": exercise_input or "Unspecified",
 "sets": int(sets_input),
 "reps": int(reps_input),
