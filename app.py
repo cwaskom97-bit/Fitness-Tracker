@@ -74,7 +74,7 @@ if "data_now" not in st.session_state:
 
 # 3. Make sure the user's name has a list waiting for entries
 if name_input not in st.session_state.data_now:
-st.session_state.data_now[name_input] = []
+    st.session_state.data_now[name_input] = []
 
 # 4. Now append the entry and save!
 st.session_state.data_now[name_input].append(entry)
