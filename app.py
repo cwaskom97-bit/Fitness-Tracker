@@ -511,7 +511,7 @@ def login_tab():
 # ---------- Log Workout tab ----------
 def log_workout_tab():
     st.subheader("Log a Workout")
- name = st.text_input("Name:", value=st.session_state.current_user or "", key="unique_tab_name_input")
+     name = st.text_input("Name:", value=st.session_state.current_user or "", key="unique_tab_name_input")
     exercise = st.text_input("Exercise:")
     sets = st.number_input("Sets:", min_value=0, value=3, step=1)
     reps = st.number_input("Reps:", min_value=0, value=10, step=1)
