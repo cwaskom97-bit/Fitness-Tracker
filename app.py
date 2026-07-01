@@ -82,7 +82,7 @@ else:
     total_duration = sum(e["duration_min"] for e in entries)
 
 with st.expander(f"🏅 {person} ({len(entries)} workouts)", expanded=True):
-col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 with col1:
 st.write(f"**Total Sets:** {total_sets}")
 st.write(f"**Total Reps:** {total_reps}")
