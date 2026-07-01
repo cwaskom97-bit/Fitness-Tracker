@@ -423,33 +423,33 @@ def prune_inactive():
         active_sessions.pop(name, None)
 
 # ----- Login / Logout Panel -----
-login_name_input = widgets.Text(description="Name:")
-login_button = widgets.Button(description="Log In", button_style="success")
-logout_button = widgets.Button(description="Log Out", button_style="danger")
-login_output = widgets.Output()
+#login_name_input = widgets.Text(description="Name:")
+#login_button = widgets.Button(description="Log In", button_style="success")
+#logout_button = widgets.Button(description="Log Out", button_style="danger")
+#login_output = widgets.Output()
 
-def do_login(b):
-    with login_output:
-        clear_output()
-        name = login_name_input.value.strip()
-        if not name:
-            print("Enter a name first.")
-            return
-        mark_active(name)
-        print(f"{name} is now logged in / active.")
+#def do_login(b):
+   # with login_output:
+       # clear_output()
+       # name = login_name_input.value.strip()
+       # if not name:
+           # print("Enter a name first.")
+           # return
+       # mark_active(name)
+       # print(f"{name} is now logged in / active.")
 
-def do_logout(b):
-    with login_output:
-        clear_output()
-        name = login_name_input.value.strip()
-        if not name:
-            print("Enter a name first.")
-            return
-        mark_inactive(name)
-        print(f"{name} logged out.")
+#def do_logout(b):
+   # with login_output:
+        #clear_output()
+        #name = login_name_input.value.strip()
+        #if not name:
+            #print("Enter a name first.")
+           # return
+        #mark_inactive(name)
+       # print(f"{name} logged out.")
 
-login_button.on_click(do_login)
-logout_button.on_click(do_logout)
+#login_button.on_click(do_login)
+#logout_button.on_click(do_logout)
 
 login_panel = widgets.VBox([
     widgets.HTML("<h3>Login</h3>"),
