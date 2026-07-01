@@ -150,3 +150,29 @@ with tab3:
     dashboard_tab()
 with tab4:
     active_users_tab()
+
+def display_workout_notifications():
+    """Displays a temporary toast notification if a new workout is detected."""
+    latest_workout = get_latest_workout()
+    
+    if latest_workout:
+        workout_id = latest_workout.get("id")
+        
+        # Initialize tracking in session state if it doesn't exist
+        if "last_notified_workout_id" not in st.session_state:
+            st.session_state.last_notified_workout_id = workout_id
+            return
+        
+        # If there is a new workout ID we haven't notified the user about yet
+        if workout_id != st.session_state.last_notified_workout_id:
+            name = latest_workout.get("name", "Someone")
+            exercise = latest_workout.get("exercise", "an exercise")
+            sets = latest_workout.get("sets", 0)
+            reps = latest_workout.get("reps", 0)
+            weight = latest_workout.get("weight", 0)
+            
+            # Update session state so it doesn't trigger again on the next rerun
+            st.session_state.last_notified_workout_id = workout_id
+            
+            # Trigger a non-intrusive toast notification in the bottom right corner
+            st.toast(f"💪 **{name}** just finished: {sets} sets x {reps} reps of {exercise} @ {weight} lbs!", icon="🎉")
