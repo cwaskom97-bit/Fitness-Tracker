@@ -74,7 +74,7 @@ import streamlit as st
 
 # Initialize the dictionary if it doesn't exist yet
 if "data_now" not in st.session_state:
-st.session_state.data_now = {}
+    st.session_state.data_now = {}
 
 # ... your other code ...
 
