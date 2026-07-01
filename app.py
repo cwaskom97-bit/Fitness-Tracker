@@ -482,7 +482,7 @@ def log_workout(name, exercise, sets, reps, weight, duration):
     }).execute()
 
 def get_all_workouts():
-    res = supabase.table("workouts").select("*").execute()
+    res = supabase.table("completions").select("*").execute()
     return res.data
 
 # ---------- Login tab ----------
