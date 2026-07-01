@@ -55,7 +55,7 @@ if "data_now" not in st.session_state:
     st.session_state.data_now = {}
 
 if name_input not in st.session_state.data_now:
-st.session_state.data_now[name_input] = []
+    st.session_state.data_now[name_input] = []
 
 # 3. Append and save cleanly on separate lines
 st.session_state.data_now[name_input].append(entry)
