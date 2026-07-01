@@ -33,7 +33,7 @@ tab1, tab2, tab3 = st.tabs(["Log Workout", "Dashboard", "Active Users"])
 
 # --- TAB 1: LOG WORKOUT PANEL ---
 with tab1:
-st.header("Log a Workout")
+    st.header("Log a Workout")
 
 name_input = st.text_input("Name:", key="log_name").strip()
 exercise_input = st.text_input("Exercise:", key="log_exercise").strip()
