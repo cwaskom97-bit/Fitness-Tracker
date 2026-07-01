@@ -12,16 +12,16 @@ if "active_users" not in st.session_state:
 
 def load_data():
 if os.path.exists(DATA_FILE):
-with open(DATA_FILE, "r") as f:
-try:
-return json.load(f)
-except:
-return {}
-return {}
+    with open(DATA_FILE, "r") as f:
+        try:
+            return json.load(f)
+        except:
+            return {}
+
 
 def save_data(data):
-with open(DATA_FILE, "w") as f:
-json.dump(data, f, indent=2)
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
 # Load data at start of app run
 data_now = load_data()
