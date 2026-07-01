@@ -532,7 +532,7 @@ def log_workout_tab():
 # ---------- Dashboard tab (everyone's full stats) ----------
 def dashboard_tab():
     st.subheader("Dashboard — Everyone's Stats")
-    if st.button("Refresh Dashboard"):
+    if st.button("Refresh Dashboard", key="tab_refresh_dashboard_btn"):
         st.rerun()
 
     workouts = get_all_workouts()
