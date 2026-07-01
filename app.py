@@ -67,7 +67,7 @@ st.success(f"Logged for {name_input}: {entry['exercise']} ({entry['sets']}x{entr
 
 # --- TAB 2: DASHBOARD PANEL ---
 with tab2:
-st.header("Dashboard — Everyone's Stats")
+    st.header("Dashboard — Everyone's Stats")
 
 if st.button("Refresh Dashboard"):
 st.rerun()
