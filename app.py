@@ -8,7 +8,7 @@ DATA_FILE = "workout_data.json"
 
 # Maintain active users across the web session
 if "active_users" not in st.session_state:
-st.session_state.active_users = set()
+    st.session_state.active_users = set()
 
 def load_data():
 if os.path.exists(DATA_FILE):
