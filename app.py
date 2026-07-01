@@ -73,7 +73,7 @@ if st.button("Refresh Dashboard"):
     st.rerun()
 
 if not data_now:
-st.info("No workouts logged yet.")
+    st.info("No workouts logged yet.")
 else:
 for person, entries in data_now.items():
 total_sets = sum(e["sets"] for e in entries)
