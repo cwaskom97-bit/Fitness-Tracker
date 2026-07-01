@@ -95,7 +95,7 @@ with tab3:
     st.header("Who's Logged In")
 
 if not st.session_state.active_users:
-st.info("No one has logged a workout yet this session.")
+    st.info("No one has logged a workout yet this session.")
 else:
 st.warning(f"=== {len(st.session_state.active_users)} user(s) currently active ===")
 for person in sorted(st.session_state.active_users):
