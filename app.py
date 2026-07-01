@@ -451,12 +451,12 @@ def prune_inactive():
 #login_button.on_click(do_login)
 #logout_button.on_click(do_logout)
 
-login_panel = widgets.VBox([
-    widgets.HTML("<h3>Login</h3>"),
-    login_name_input,
-    widgets.HBox([login_button, logout_button]),
-    login_output
-])
+#login_panel = widgets.VBox([
+  #  widgets.HTML("<h3>Login</h3>"),
+   # login_name_input,
+   # widgets.HBox([login_button, logout_button]),
+   # login_output
+#])
 
 # ----- Log Workout Panel (unchanged) -----
 name_input = widgets.Text(description="Name:")
