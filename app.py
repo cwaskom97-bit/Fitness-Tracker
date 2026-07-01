@@ -56,7 +56,7 @@ else:
 }
 
 # Update data dictionary
-if name_input not in data_now:
+if data_now is not None and name_input not in data_now:
     data_now[name_input] = []
 data_now[name_input].append(entry)
 
