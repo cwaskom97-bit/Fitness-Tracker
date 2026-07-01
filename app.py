@@ -512,11 +512,13 @@ def login_tab():
 def log_workout_tab():
     st.subheader("Log a Workout")
     name = st.text_input("Name:", value=st.session_state.current_user or "", key="unique_tab_name_input")
-    exercise = st.text_input("Exercise:")
-    sets = st.number_input("Sets:", min_value=0, value=3, step=1)
-    reps = st.number_input("Reps:", min_value=0, value=10, step=1)
-    weight = st.number_input("Weight (lb):", min_value=0.0, value=0.0, step=5.0)
-    duration = st.number_input("Duration (min):", min_value=0.0, value=0.0, step=1.0)
+
+    exercise = st.text_input("Exercise:", key="tab_exercise_input")
+    sets = st.number_input("Sets:", min_value=0, value=3, step=1, key="tab_sets_input")
+    reps = st.number_input("Reps:", min_value=0, value=10, step=1, key="tab_reps_input")
+    weight = st.number_input("Weight (lb):", min_value=0.0, value=0.0, step=5.0, key="tab_weight_input")
+    duration = st.number_input("Duration (min):", min_value=0.0, value=0.0, step=1.0, key="tab_duration_input")
+
 
     if st.button("Log Workout"):
         if not name.strip():
