@@ -467,7 +467,7 @@ def mark_inactive(name):
 
 def get_active_users():
     cutoff = (datetime.utcnow() - timedelta(minutes=TIMEOUT_MINUTES)).isoformat()
-    res = supabase.table("active_users").select("*").gte("last_active", cutoff).execute()
+    res = supabase.table("tasks").select("*").gte("task_date", cutoff).execute()
     return sorted(res.data, key=lambda r: r["last_active"], reverse=True)
 
 def log_workout(name, exercise, sets, reps, weight, duration):
