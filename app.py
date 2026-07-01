@@ -58,8 +58,11 @@ else:
 # Update data dictionary
 if data_now is not None and name_input not in data_now:
     data_now[name_input] = []
-data_now.setdefault(name_input, []).append(entry)
 
+if name_input not in data_now or data_now[name_input] is None:
+data_now[name_input] = [] # Initialize it as a list first
+
+data_now[name_input].append(entry) # Now it's safe to append!
 save_data(data_now)
 st.session_state.active_users.add(name_input)
 
