@@ -44,15 +44,13 @@ duration_input = st.number_input("Duration (min):", min_value=0.0, value=0.0, st
 
 if st.button("Log Workout"):
 # 1. Gather the inputs into the 'entry' dictionary right her
-    entry = {
-entry = {
+  entry = {
 "exercise": exercise_input or "Unspecified",
 "sets": int(sets_input),
-"reps": reps, # <--- LINE 48: This is causing the error!
-"weight": weight,
-"duration_min": duration,
-"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
+"reps": int(reps_input),
+"weight": float(weight_input),
+"duration_min": float(duration_input),
+"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 }
 
 # 2. Make sure the dictionary exists in session state
