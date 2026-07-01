@@ -520,7 +520,7 @@ def log_workout_tab():
     duration = st.number_input("Duration (min):", min_value=0.0, value=0.0, step=1.0, key="tab_duration_input")
 
 
-    if st.button("Log Workout"):
+    if st.button("Log Workout", key="tab_log_workout_btn"):
         if not name.strip():
             st.error("Enter a name first.")
         else:
