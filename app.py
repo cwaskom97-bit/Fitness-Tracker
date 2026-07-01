@@ -70,8 +70,19 @@ if name_input not in data_now or data_now[name_input] is None:
 # 3. Now it is 100% safe to append!
     data_now[name_input] = [] # Initialize it as a list first
 
-data_now[name_input].append(entry) # Now it's safe to append!
-save_data(data_now)
+import streamlit as st
+
+# Initialize the dictionary if it doesn't exist yet
+if "data_now" not in st.session_state:
+st.session_state.data_now = {}
+
+# ... your other code ...
+
+# When logging the workout (Line 73 area):
+if name_input not in st.session_state.data_now:
+st.session_state.data_now[name_input] = []
+
+st.session_state.data_now[name_input].append(entry)save_data(data_now)
 st.session_state.active_users.add(name_input)
 
 st.success(f"Logged for {name_input}: {entry['exercise']} ({entry['sets']}x{entry['reps']})")
