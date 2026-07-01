@@ -42,9 +42,26 @@ reps_input = st.number_input("Reps:", min_value=1, value=10)
 weight_input = st.number_input("Weight (lb):", min_value=0.0, value=0.0, step=0.5)
 duration_input = st.number_input("Duration (min):", min_value=0.0, value=0.0, step=1.0)
 
-if st.button("Log Workout", type="primary"):
-    if not name_input:
-        st.error("Enter a name first.")
+if st.button("Log Workout"):
+# 1. Gather the inputs into the 'entry' dictionary right here
+entry = {
+"reps": reps,
+"weight": weight,
+"duration": duration
+}
+
+# 2. Make sure the dictionary exists in session state
+if "data_now" not in st.session_state:
+st.session_state.data_now = {}
+
+if name_input not in st.session_state.data_now:
+st.session_state.data_now[name_input] = []
+
+# 3. Append and save cleanly on separate lines
+st.session_state.data_now[name_input].append(entry)
+save_data(st.session_state.data_now)
+
+st.success("Workout logged successfully!")
 else:
     entry = {
 "exercise": exercise_input or "Unspecified",
