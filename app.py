@@ -80,7 +80,7 @@ if "data_now" not in st.session_state:
 
 # When logging the workout (Line 73 area):
 if name_input not in st.session_state.data_now:
-st.session_state.data_now[name_input] = []
+    st.session_state.data_now[name_input] = []
 
 st.session_state.data_now[name_input].append(entry)save_data(data_now)
 st.session_state.active_users.add(name_input)
