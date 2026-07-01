@@ -61,7 +61,7 @@ if data_now is not None and name_input not in data_now:
 
     # 1. First check if data_now is completely empty or None
 if data_now is None:
-data_now = {}
+    data_now = {}
 
 # 2. Then check if the specific workout name doesn't exist yet
 if name_input not in data_now or data_now[name_input] is None:
