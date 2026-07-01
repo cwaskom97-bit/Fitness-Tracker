@@ -52,7 +52,7 @@ if st.button("Log Workout"):
 
 # 2. Make sure the dictionary exists in session state
 if "data_now" not in st.session_state:
-st.session_state.data_now = {}
+    st.session_state.data_now = {}
 
 if name_input not in st.session_state.data_now:
 st.session_state.data_now[name_input] = []
