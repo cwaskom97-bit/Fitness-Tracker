@@ -31,7 +31,7 @@ supabase = get_client()
 
 # ---------- Session state ----------
 if "current_user" not in st.session_state:
-st.session_state.current_user = None
+    st.session_state.current_user = None
 
 # ---------- Data helpers matching your real database ----------
 def mark_active(name):
@@ -84,26 +84,26 @@ return []
 
 # ---------- Tab Components ----------
 def login_tab():
-st.subheader("Login")
-name = st.text_input("Your name", key="login_name_input")
-col1, col2 = st.columns(2)
-if col1.button("Log In", key="login_btn_action"):
-if name.strip():
-st.session_state.current_user = name.strip()
-mark_active(name.strip())
-st.success(f"Logged in as {name.strip()}")
-st.rerun()
+    st.subheader("Login")
+    name = st.text_input("Your name", key="login_name_input")
+    col1, col2 = st.columns(2)
+    if col1.button("Log In", key="login_btn_action"):
+        if name.strip():
+            st.session_state.current_user = name.strip()
+            mark_active(name.strip())
+            st.success(f"Logged in as {name.strip()}")
+            st.rerun()
 else:
 st.error("Enter a name first.")
 
 if col2.button("Log Out", key="logout_btn_action"):
-if st.session_state.current_user:
-mark_inactive(st.session_state.current_user)
-st.success(f"{st.session_state.current_user} logged out.")
-st.session_state.current_user = None
-st.rerun()
+    if st.session_state.current_user:
+        mark_inactive(st.session_state.current_user)
+        st.success(f"{st.session_state.current_user} logged out.")
+        st.session_state.current_user = None
+        st.rerun()
 else:
-st.error("You're not logged in.")
+    st.error("You're not logged in.")
 
 if st.session_state.current_user:
     st.info(f"Currently logged in as: **{st.session_state.current_user}**")
