@@ -43,7 +43,7 @@ weight_input = st.number_input("Weight (lb):", min_value=0.0, value=0.0, step=0.
 duration_input = st.number_input("Duration (min):", min_value=0.0, value=0.0, step=1.0)
 
 if st.button("Log Workout", type="primary"):
-if not name_input:
+    if not name_input:
 st.error("Enter a name first.")
 else:
 entry = {
