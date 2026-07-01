@@ -70,7 +70,7 @@ with tab2:
     st.header("Dashboard — Everyone's Stats")
 
 if st.button("Refresh Dashboard"):
-st.rerun()
+    st.rerun()
 
 if not data_now:
 st.info("No workouts logged yet.")
