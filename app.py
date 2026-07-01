@@ -75,7 +75,7 @@ if st.button("Refresh Dashboard"):
 if not data_now:
     st.info("No workouts logged yet.")
 else:
-for person, entries in data_now.items():
+    for person, entries in data_now.items():
 total_sets = sum(e["sets"] for e in entries)
 total_reps = sum(e["sets"] * e["reps"] for e in entries)
 total_volume = sum(e["sets"] * e["reps"] * e["weight"] for e in entries)
