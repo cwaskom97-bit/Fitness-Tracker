@@ -97,7 +97,7 @@ with tab3:
 if not st.session_state.active_users:
     st.info("No one has logged a workout yet this session.")
 else:
-st.warning(f"=== {len(st.session_state.active_users)} user(s) currently active ===")
+    st.warning(f"=== {len(st.session_state.active_users)} user(s) currently active ===")
 for person in sorted(st.session_state.active_users):
 entries = data_now.get(person, [])
 total_sets = sum(e["sets"] for e in entries)
