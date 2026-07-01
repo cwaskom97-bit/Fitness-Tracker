@@ -59,7 +59,15 @@ else:
 if data_now is not None and name_input not in data_now:
     data_now[name_input] = []
 
+    # 1. First check if data_now is completely empty or None
+if data_now is None:
+data_now = {}
+
+# 2. Then check if the specific workout name doesn't exist yet
 if name_input not in data_now or data_now[name_input] is None:
+data_now[name_input] = []
+
+# 3. Now it is 100% safe to append!
     data_now[name_input] = [] # Initialize it as a list first
 
 data_now[name_input].append(entry) # Now it's safe to append!
