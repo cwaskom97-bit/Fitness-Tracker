@@ -582,4 +582,4 @@ with tab3:
 with tab4:
     active_users_tab()
 
-show_active_users()
+active_users_tab()
