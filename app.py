@@ -58,12 +58,8 @@ if name_input not in st.session_state.data_now:
     st.session_state.data_now[name_input] = []
 
 # 3. Append and save cleanly on separate lines
-st.session_state.data_now[name_input].append(entry)
-save_data(st.session_state.data_now)
-
-st.success("Workout logged successfully!")
-else:
-    entry = {
+# 1. First, create the entry with all the workout details
+entry = {
 "exercise": exercise_input or "Unspecified",
 "sets": int(sets_input),
 "reps": int(reps_input),
@@ -72,23 +68,19 @@ else:
 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
 }
 
-# Update data dictionary
-if data_now is not None and name_input not in data_now:
-    data_now[name_input] = []
+# 2. Make sure the tracking dictionary exists in session state
+if "data_now" not in st.session_state:
+st.session_state.data_now = {}
 
-    # 1. First check if data_now is completely empty or None
-if data_now is None:
-    data_now = {}
+# 3. Make sure the user's name has a list waiting for entries
+if name_input not in st.session_state.data_now:
+st.session_state.data_now[name_input] = []
 
-# 2. Then check if the specific workout name doesn't exist yet
-if name_input not in data_now or data_now[name_input] is None:
-    data_now[name_input] = []
+# 4. Now append the entry and save!
+st.session_state.data_now[name_input].append(entry)
+save_data(st.session_state.data_now)
 
-# 3. Now it is 100% safe to append!
-    data_now[name_input] = [] # Initialize it as a list first
-
-import streamlit as st
-
+st.success("Workout logged successfully!")
 # Initialize the dictionary if it doesn't exist yet
 if "data_now" not in st.session_state:
     st.session_state.data_now = {}
