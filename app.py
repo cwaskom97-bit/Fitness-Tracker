@@ -43,8 +43,8 @@ weight_input = st.number_input("Weight (lb):", min_value=0.0, value=0.0, step=0.
 duration_input = st.number_input("Duration (min):", min_value=0.0, value=0.0, step=1.0)
 
 if st.button("Log Workout"):
-# 1. Gather the inputs into the 'entry' dictionary right here
-entry = {
+# 1. Gather the inputs into the 'entry' dictionary right her
+    entry = {
 "reps": reps,
 "weight": weight,
 "duration": duration
