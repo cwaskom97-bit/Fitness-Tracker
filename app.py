@@ -92,7 +92,7 @@ st.write(f"**Total Duration:** {total_duration:.1f} min")
 
 # --- TAB 3: ACTIVE USERS PANEL ---
 with tab3:
-st.header("Who's Logged In")
+    st.header("Who's Logged In")
 
 if not st.session_state.active_users:
 st.info("No one has logged a workout yet this session.")
