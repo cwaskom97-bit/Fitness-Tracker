@@ -77,9 +77,9 @@ if not data_now:
 else:
     for person, entries in data_now.items():
         total_sets = sum(e["sets"] for e in entries)
-            total_reps = sum(e["sets"] * e["reps"] for e in entries)
-                total_volume = sum(e["sets"] * e["reps"] * e["weight"] for e in entries)
-                    total_duration = sum(e["duration_min"] for e in entries)
+    total_reps = sum(e["sets"] * e["reps"] for e in entries)
+    total_volume = sum(e["sets"] * e["reps"] * e["weight"] for e in entries)
+    total_duration = sum(e["duration_min"] for e in entries)
 
 with st.expander(f"🏅 {person} ({len(entries)} workouts)", expanded=True):
 col1, col2 = st.columns(2)
