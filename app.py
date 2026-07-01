@@ -70,7 +70,7 @@ entry = {
 
 # 2. Make sure the tracking dictionary exists in session state
 if "data_now" not in st.session_state:
-st.session_state.data_now = {}
+    st.session_state.data_now = {}
 
 # 3. Make sure the user's name has a list waiting for entries
 if name_input not in st.session_state.data_now:
