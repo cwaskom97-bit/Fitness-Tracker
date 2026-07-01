@@ -11,12 +11,12 @@ if "active_users" not in st.session_state:
     st.session_state.active_users = set()
 
 def load_data():
-if os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "r") as f:
-        try:
-            return json.load(f)
-        except:
-            return {}
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r") as f:
+            try:
+                return json.load(f)
+            except:
+                return {}
 
 
 def save_data(data):
