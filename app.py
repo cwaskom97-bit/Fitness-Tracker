@@ -422,141 +422,162 @@ def prune_inactive():
     for name in stale:
         active_sessions.pop(name, None)
 
-# ----- Login / Logout Panel -----
-#login_name_input = widgets.Text(description="Name:")
-#login_button = widgets.Button(description="Log In", button_style="success")
-#logout_button = widgets.Button(description="Log Out", button_style="danger")
-#login_output = widgets.Output()
+import streamlit as st
+from supabase import create_client, Client
+from datetime import datetime, timedelta
 
-#def do_login(b):
-   # with login_output:
-       # clear_output()
-       # name = login_name_input.value.strip()
-       # if not name:
-           # print("Enter a name first.")
-           # return
-       # mark_active(name)
-       # print(f"{name} is now logged in / active.")
+st.set_page_config(page_title="Workout Tracker", page_icon="🏋️", layout="centered")
 
-#def do_logout(b):
-   # with login_output:
-        #clear_output()
-        #name = login_name_input.value.strip()
-        #if not name:
-            #print("Enter a name first.")
-           # return
-        #mark_inactive(name)
-       # print(f"{name} logged out.")
+TIMEOUT_MINUTES = 10  # how long someone stays "active" without activity
 
-#login_button.on_click(do_login)
-#logout_button.on_click(do_logout)
+# ---------- Mobile-friendly styling ----------
+st.markdown("""
+<style>
+    div.stButton > button {
+        width: 100%;
+        height: 3em;
+        font-size: 1.05em;
+        border-radius: 10px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-#login_panel = widgets.VBox([
-  #  widgets.HTML("<h3>Login</h3>"),
-   # login_name_input,
-   # widgets.HBox([login_button, logout_button]),
-   # login_output
-#])
+# ---------- Supabase connection ----------
+@st.cache_resource
+def get_client() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
 
-# ----- Log Workout Panel (unchanged) -----
-name_input = widgets.Text(description="Name:")
-exercise_input = widgets.Text(description="Exercise:")
-sets_input = widgets.IntText(description="Sets:", value=3)
-reps_input = widgets.IntText(description="Reps:", value=10)
-weight_input = widgets.FloatText(description="Weight (lb):", value=0)
-duration_input = widgets.FloatText(description="Duration (min):", value=0)
-log_button = widgets.Button(description="Log Workout", button_style="success")
-log_output = widgets.Output()
+supabase = get_client()
 
-def log_workout(b):
-    with log_output:
-        clear_output()
-        name = name_input.value.strip()
-        if not name:
-            print("Enter a name first.")
-            return
-        entry = {
-            "exercise": exercise_input.value.strip() or "Unspecified",
-            "sets": sets_input.value,
-            "reps": reps_input.value,
-            "weight": weight_input.value,
-            "duration_min": duration_input.value,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        }
-        data.setdefault(name, []).append(entry)
-        save_data(data)
-        mark_active(name)  # logging a workout counts as activity
-        print(f"Logged for {name}: {entry}")
+# ---------- Session state ----------
+if "current_user" not in st.session_state:
+    st.session_state.current_user = None
 
-log_button.on_click(log_workout)
+# ---------- Data helpers ----------
+def mark_active(name):
+    supabase.table("active_users").upsert({
+        "name": name,
+        "last_active": datetime.utcnow().isoformat()
+    }).execute()
 
-log_panel = widgets.VBox([
-    widgets.HTML("<h3>Log a Workout</h3>"),
-    name_input, exercise_input, sets_input, reps_input,
-    weight_input, duration_input, log_button, log_output
-])
+def mark_inactive(name):
+    supabase.table("active_users").delete().eq("name", name).execute()
 
-# ----- Dashboard Panel (everyone's full stats, regardless of active status) -----
-dash_button = widgets.Button(description="Refresh Dashboard", button_style="info")
-dash_output = widgets.Output()
+def get_active_users():
+    cutoff = (datetime.utcnow() - timedelta(minutes=TIMEOUT_MINUTES)).isoformat()
+    res = supabase.table("active_users").select("*").gte("last_active", cutoff).execute()
+    return sorted(res.data, key=lambda r: r["last_active"], reverse=True)
 
-def show_dashboard(b=None):
-    with dash_output:
-        clear_output()
-        data_now = load_data()
-        if not data_now:
-            print("No workouts logged yet.")
-            return
-        for person, entries in data_now.items():
-            total_sets = sum(e["sets"] for e in entries)
-            total_reps = sum(e["sets"] * e["reps"] for e in entries)
-            total_volume = sum(e["sets"] * e["reps"] * e["weight"] for e in entries)
-            total_duration = sum(e["duration_min"] for e in entries)
-            print(f"=== {person} ===")
-            print(f"  Workouts logged: {len(entries)}")
-            print(f"  Total sets: {total_sets}")
-            print(f"  Total reps: {total_reps}")
-            print(f"  Total volume (sets x reps x weight): {total_volume:.1f}")
-            print(f"  Total duration: {total_duration:.1f} min")
-            print()
+def log_workout(name, exercise, sets, reps, weight, duration):
+    supabase.table("workouts").insert({
+        "name": name,
+        "exercise": exercise or "Unspecified",
+        "sets": sets,
+        "reps": reps,
+        "weight": weight,
+        "duration_min": duration,
+        "logged_at": datetime.utcnow().isoformat()
+    }).execute()
 
-dash_button.on_click(show_dashboard)
+def get_all_workouts():
+    res = supabase.table("workouts").select("*").execute()
+    return res.data
 
-dashboard_panel = widgets.VBox([
-    widgets.HTML("<h3>Dashboard — Everyone's Stats</h3>"),
-    dash_button, dash_output
-])
+# ---------- Login tab ----------
+def login_tab():
+    st.subheader("Login")
+    name = st.text_input("Your name", key="login_name")
+    col1, col2 = st.columns(2)
+    if col1.button("Log In"):
+        if name.strip():
+            st.session_state.current_user = name.strip()
+            mark_active(name.strip())
+            st.success(f"Logged in as {name.strip()}")
+        else:
+            st.error("Enter a name first.")
+    if col2.button("Log Out"):
+        if st.session_state.current_user:
+            mark_inactive(st.session_state.current_user)
+            st.success(f"{st.session_state.current_user} logged out.")
+            st.session_state.current_user = None
+        else:
+            st.error("You're not logged in.")
 
-# ----- Active Users Panel (only currently online) -----
-users_button = widgets.Button(description="Refresh Active Users", button_style="warning")
-users_output = widgets.Output()
+    if st.session_state.current_user:
+        st.info(f"Currently logged in as: **{st.session_state.current_user}**")
 
-def show_active_users(b=None):
-    prune_inactive()
-    with users_output:
-        clear_output()
-        if not active_sessions:
-            print("No one is currently active.")
-            return
-        print(f"=== {len(active_sessions)} user(s) currently active (last {TIMEOUT_MINUTES} min) ===\n")
-        for person, last_seen in sorted(active_sessions.items()):
-            mins_ago = (datetime.now() - last_seen).seconds // 60
-            print(f"{person} — active {mins_ago} min ago")
+# ---------- Log Workout tab ----------
+def log_workout_tab():
+    st.subheader("Log a Workout")
+    name = st.text_input("Name:", value=st.session_state.current_user or "", key="log_name")
+    exercise = st.text_input("Exercise:")
+    sets = st.number_input("Sets:", min_value=0, value=3, step=1)
+    reps = st.number_input("Reps:", min_value=0, value=10, step=1)
+    weight = st.number_input("Weight (lb):", min_value=0.0, value=0.0, step=5.0)
+    duration = st.number_input("Duration (min):", min_value=0.0, value=0.0, step=1.0)
 
-users_button.on_click(show_active_users)
+    if st.button("Log Workout"):
+        if not name.strip():
+            st.error("Enter a name first.")
+        else:
+            log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration)
+            mark_active(name.strip())  # logging counts as activity
+            st.success(f"Logged for {name.strip()}: {exercise or 'Unspecified'} — "
+                       f"{sets}x{reps} @ {weight}lb, {duration} min")
 
-users_panel = widgets.VBox([
-    widgets.HTML("<h3>Who's Active Right Now</h3>"),
-    users_button, users_output
-])
+# ---------- Dashboard tab (everyone's full stats) ----------
+def dashboard_tab():
+    st.subheader("Dashboard — Everyone's Stats")
+    if st.button("Refresh Dashboard"):
+        st.rerun()
 
-# ----- Assemble tabs -----
-tabs = widgets.Tab(children=[login_panel, log_panel, dashboard_panel, users_panel])
-tabs.set_title(0, "Login")
-tabs.set_title(1, "Log Workout")
-tabs.set_title(2, "Dashboard")
-tabs.set_title(3, "Active Users")
+    workouts = get_all_workouts()
+    if not workouts:
+        st.info("No workouts logged yet.")
+        return
 
-display(tabs)
-show_dashboard()
+    by_person = {}
+    for w in workouts:
+        by_person.setdefault(w["name"], []).append(w)
+
+    for person, entries in by_person.items():
+        total_sets = sum(e["sets"] for e in entries)
+        total_reps = sum(e["sets"] * e["reps"] for e in entries)
+        total_volume = sum(e["sets"] * e["reps"] * e["weight"] for e in entries)
+        total_duration = sum(e["duration_min"] for e in entries)
+        with st.expander(f"{person} — {len(entries)} workout(s)"):
+            st.write(f"Total sets: {total_sets}")
+            st.write(f"Total reps: {total_reps}")
+            st.write(f"Total volume (sets × reps × weight): {total_volume:.1f}")
+            st.write(f"Total duration: {total_duration:.1f} min")
+
+# ---------- Active Users tab (only currently online) ----------
+def active_users_tab():
+    st.subheader(f"Who's Active Right Now (last {TIMEOUT_MINUTES} min)")
+    if st.button("Refresh Active Users"):
+        st.rerun()
+
+    active = get_active_users()
+    if not active:
+        st.info("No one is currently active.")
+        return
+
+    for user in active:
+        last_active = datetime.fromisoformat(user["last_active"])
+        mins_ago = int((datetime.utcnow() - last_active).total_seconds() // 60)
+        st.write(f"🟢 **{user['name']}** — active {mins_ago} min ago")
+
+# ---------- Router ----------
+tab1, tab2, tab3, tab4 = st.tabs(["Login", "Log Workout", "Dashboard", "Active Users"])
+with tab1:
+    login_tab()
+with tab2:
+    log_workout_tab()
+with tab3:
+    dashboard_tab()
+with tab4:
+    active_users_tab()
+
 show_active_users()
