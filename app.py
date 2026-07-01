@@ -84,7 +84,7 @@ else:
 with st.expander(f"🏅 {person} ({len(entries)} workouts)", expanded=True):
     col1, col2 = st.columns(2)
 with col1:
-st.write(f"**Total Sets:** {total_sets}")
+    st.write(f"**Total Sets:** {total_sets}")
 st.write(f"**Total Reps:** {total_reps}")
 with col2:
 st.write(f"**Total Volume:** {total_volume:.1f} lbs")
