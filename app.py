@@ -558,7 +558,7 @@ def dashboard_tab():
 # ---------- Active Users tab (only currently online) ----------
 def active_users_tab():
     st.subheader(f"Who's Active Right Now (last {TIMEOUT_MINUTES} min)")
-    if st.button("Refresh Active Users"):
+    if st.button("Refresh Active Users", key="tab_refresh_active_users btn"):
         st.rerun()
 
     active = get_active_users()
