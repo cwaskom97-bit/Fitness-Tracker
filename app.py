@@ -52,7 +52,7 @@ entry = {
 "weight": weight,
 "duration_min": duration,
 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-
+    }
 }
 
 # 2. Make sure the dictionary exists in session state
