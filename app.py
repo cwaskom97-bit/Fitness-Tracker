@@ -57,7 +57,7 @@ else:
 
 # Update data dictionary
 if name_input not in data_now:
-data_now[name_input] = []
+    data_now[name_input] = []
 data_now[name_input].append(entry)
 
 save_data(data_now)
