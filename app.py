@@ -106,6 +106,6 @@ total_volume = sum(e["sets"] * e["reps"] * e["weight"] for e in entries)
 total_duration = sum(e["duration_min"] for e in entries)
 
 st.markdown(f"### 👤 {person}")
-st.text(f" Workouts logged: {len(entries)}
+st.text(f" Workouts logged: {len(entries)}")
 st.write(f"Total sets: {total_sets} | Total reps: {total_reps}")
 st.write(f"Total volume: {total_volume:.1f} | Total duration: {total_duration:.1f} min")
