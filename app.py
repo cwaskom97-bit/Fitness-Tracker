@@ -37,10 +37,10 @@ if "current_user" not in st.session_state:
 def mark_active(name):
 # Maps to your actual 'tasks' table columns: task_name and task_date
     try:
-supabase.table("tasks").upsert({
-"task_name": name,
-"task_date": datetime.utcnow().date().isoformat()
-}).execute()
+    supabase.table("tasks").upsert({
+    "task_name": name,
+    "task_date": datetime.utcnow().date().isoformat()
+    }).execute()
 except Exception as e:
 st.error(f"Error marking active: {e}")
 
