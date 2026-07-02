@@ -65,10 +65,9 @@ def log_workout(name, exercise, sets, reps, weight, duration):
             "weight": weight,
             "duration": duration
         }).execute()
-    except Exception as e:
-        print("\n--- WORKOUT DATABASE ERROR DETAILS ---")
-        print(e)
-        print("--------------------------------------\n")
+ except Exception as e:
+        import streamlit as st
+        st.error(f"Database Error: {e}")
         raise e
 
 def get_all_workouts():
