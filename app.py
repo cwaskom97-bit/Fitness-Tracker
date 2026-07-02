@@ -52,26 +52,16 @@ def mark_inactive(name):
 def get_active_users():
     cutoff = (datetime.utcnow() - timedelta(minutes=TIMEOUT_MINUTES)).date().isoformat()
     res = supabase.table("tasks").select("*").gte("task_date", cutoff).execute()
-    return sorted(res.data, key=lambda r: r.get("task_date", ""), reverse=True)
 
-def log_workout(name, exercise, sets, reps, weight, duration):
-    # Maps directly to your capitalized 'Completions' table
-    try:
-        supabase.table("Completions").insert({
-            "name": name,
-            "exercise": exercise or "Unspecified",
-            "sets": sets,
-            "reps": reps,
-            "weight": weight,
-            "duration": duration
-        }).execute()
- except Exception as e:
-        import streamlit as st; st.error(f"Database Error: {e}"); raise e
 
 def get_all_workouts():
     res = supabase.table("Completions").select("*").execute()
     return res.data
-
+def log_workout(name, exercise, sets, reps, weight, duration):
+    try:
+        supabase.table("Completions").insert({"name": name, "exercise": exercise or "Unspecified", "sets": sets, "reps": reps, "weight": weight, "duration": duration}).execute()
+    except Exception as e:
+        import streamlit as st; st.error(f"Database Error: {e}"); raise e
 # 5. Interface Tabs
 def login_tab():
     st.subheader("Login")
