@@ -66,9 +66,7 @@ def log_workout(name, exercise, sets, reps, weight, duration):
             "duration": duration
         }).execute()
  except Exception as e:
-        import streamlit as st
-        st.error(f"Database Error: {e}")
-        raise e
+        import streamlit as st; st.error(f"Database Error: {e}"); raise e
 
 def get_all_workouts():
     res = supabase.table("Completions").select("*").execute()
