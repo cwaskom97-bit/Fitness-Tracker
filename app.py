@@ -35,10 +35,16 @@ if "current_user" not in st.session_state:
 # 4. Database Interactions (Matching your actual tables)
 def mark_active(name):
     # Maps directly to your 'tasks' table
-    supabase.table("tasks").upsert({
-        "task_name": name,
-        "task_date": datetime.utcnow().date().isoformat()
-    }).execute()
+  try:
+        supabase.table("tasks").upsert({
+            "task_name": name,
+            "task_date": datetime.utcnow().date().isoformat()
+        }).execute()
+    except Exception as e:
+        print("\n--- DATABASE ERROR DETAILS ---")
+        print(e)
+        print("-------------------------------\n")
+        raise e  
 
 def mark_inactive(name):
     supabase.table("tasks").delete().eq("task_name", name).execute()
