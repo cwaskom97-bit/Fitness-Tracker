@@ -56,15 +56,15 @@ def get_active_users():
 
 def log_workout(name, exercise, sets, reps, weight, duration):
     # Maps directly to your capitalized 'Completions' table
-   try:
-            supabase.table("Completions").insert({
-                "name": name,
-                "exercise": exercise or "Unspecified",
-                "sets": sets,
-                "reps": reps,
-                "weight": weight,
-                "duration": duration
-            }).execute()
+    try:
+        supabase.table("Completions").insert({
+            "name": name,
+            "exercise": exercise or "Unspecified",
+            "sets": sets,
+            "reps": reps,
+            "weight": weight,
+            "duration": duration
+        }).execute()
     except Exception as e:
         print("\n--- WORKOUT DATABASE ERROR DETAILS ---")
         print(e)
