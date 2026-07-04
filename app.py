@@ -59,7 +59,7 @@ div.stButton > button[key*="inline_del_"] {
     height: auto !important;
     padding: 0 !important;
     width: auto !important;
-    font-size: 1em !important;
+    font-size: 1.1em !important;
 }
 
 /* Unified circular crop layout structure */
@@ -210,7 +210,8 @@ def login_tab():
             if not first_name.strip() or not last_name.strip():
                 st.error("Please enter both your first and last name.")
             else:
-                full_name = f"{first_name.strip()} {last_name.strip()}"
+                # Capitalize and clean name inputs perfectly to enforce a unified scheme
+                full_name = f"{first_name.strip().title()} {last_name.strip().title()}"
                 st.session_state.current_user = full_name
                 
                 if uploaded_file is not None:
@@ -243,7 +244,6 @@ def log_workout_tab():
         
     rest_time = st.number_input("Rest Time (seconds):", min_value=0, value=60, step=5, key="workout_entry_rest")
 
-    # Places standard "Log Workout" and green "Finish Workout" buttons side-by-side
     btn_col1, btn_col2 = st.columns(2)
     with btn_col1:
         if st.button("Log Workout", key="normal_log_workout_btn"):
@@ -282,9 +282,12 @@ def dashboard_tab():
             for entry in entries:
                 log_text = f"{entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)"
                 
-                # Ownership verification: button renders inline ONLY if logged in name matches the workout log
-                if entry.get("name") == st.session_state.current_user:
-                    col_text, col_del = st.columns([0.90, 0.10])
+                # Dynamic matching logic: Checks if either name contains the other to prevent strict mismatch locks
+                db_name = str(entry.get("name", "")).strip().lower()
+                session_name = str(st.session_state.current_user or "").strip().lower()
+                
+                if session_name and (session_name in db_name or db_name in session_name):
+                    col_text, col_del = st.columns([0.88, 0.12])
                     col_text.write(log_text)
                     if col_del.button("❌", key=f"inline_del_{entry.get('id')}"):
                         delete_workout(entry.get('id'))
