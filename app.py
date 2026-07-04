@@ -41,7 +41,7 @@ if "login_email" not in st.session_state:
 if "full_name" not in st.session_state:
     st.session_state.full_name = ""
 
-# 4. Database Interactions
+# 4. Database & Auth Interactions
 def mark_active(name):
     try:
         supabase.table("tasks").upsert({"task_name": name, "task_date": datetime.utcnow().date().isoformat()}).execute()
@@ -106,7 +106,6 @@ def login_tab():
                 
             email = st.text_input("Enter your email", key="user_email_input")
             
-            # Integrated your exact request block logic below
             if st.button("Send Verification Code", key="send_otp_btn"):
                 if not first_name.strip() or not last_name.strip():
                     st.error("Please enter both your first and last name.")
@@ -114,19 +113,15 @@ def login_tab():
                     st.error("Please enter a valid email address.")
                 else:
                     try:
-                        res = supabase.auth.sign_in_with_otp({
-                            "email": email,
-                            "options": {
-                                "should_create_user": True
-                            }
-                        })
+                        # Requests a numeric token code from Supabase
+                        supabase.auth.sign_in_with_otp({"email": email.strip(), "options": {"should_create_user": True}})
                         st.session_state.login_email = email.strip()
                         st.session_state.full_name = f"{first_name.strip()} {last_name.strip()}"
                         st.session_state.otp_sent = True
-                        st.success("Check your email for the 6-digit code!")
+                        st.success(f"Verification code sent to {email.strip()}!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Error: {e}")
+                        st.error(f"Error sending code: {e}")
         else:
             st.info(f"Check your email: {st.session_state.login_email} (Registering as {st.session_state.full_name})")
             token = st.text_input("Enter the 6-digit verification code", key="otp_token_input")
@@ -135,6 +130,7 @@ def login_tab():
             if col1.button("Verify & Log In", key="verify_otp_btn"):
                 if token.strip():
                     try:
+                        # Checks token using signup verification context
                         res = supabase.auth.verify_otp({"email": st.session_state.login_email, "token": token.strip(), "type": "signup"})
                         st.session_state.current_user = st.session_state.full_name
                         mark_active(st.session_state.current_user)
@@ -142,6 +138,7 @@ def login_tab():
                         st.rerun()
                     except Exception as e:
                         try:
+                            # Fallback check using user login verification context
                             res = supabase.auth.verify_otp({"email": st.session_state.login_email, "token": token.strip(), "type": "login"})
                             st.session_state.current_user = st.session_state.full_name
                             mark_active(st.session_state.current_user)
@@ -230,4 +227,20 @@ def active_users_tab():
         user_name = user.get("task_name", "Anonymous User")
         st.write(f" 🔥 **{user_name}** is actively crushing it")
 
+# 6. Main App Layout Router (Auth Guarded)
+if st.session_state.current_user is None:
+    tab1, = st.tabs(["Login"])
+    with tab1:
+        login_tab()
+        st.warning("Please log in to unlock the rest of the application features.")
+else:
+    tab1, tab2, tab3, tab4 = st.tabs(["Login Status", "Log Workout", "Dashboard", "Active Users"])
+    with tab1:
+        login_tab()
+    with tab2:
+        log_workout_tab()
+    with tab3:
+        dashboard_tab()
+    with tab4:
+        active_users_tab()
 # 6. Main App Layout Router (Auth Guarded
