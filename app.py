@@ -140,7 +140,8 @@ def get_all_workouts():
     except Exception as e:
         return []
 
-def log_workout(name, exercise, sets, reps, weight, duration, rest_time):
+# Updated log_workout function signature to handle a "completed" state flag
+def log_workout(name, exercise, sets, reps, weight, duration, rest_time, completed=False):
     try:
         supabase.table("Completions").insert({
             "name": name, 
@@ -149,9 +150,10 @@ def log_workout(name, exercise, sets, reps, weight, duration, rest_time):
             "reps": reps, 
             "weight": weight, 
             "duration": duration,
-            "rest_time": rest_time
+            "rest_time": rest_time,
+            "completed": completed # Sent to Supabase to filter finished status
         }).execute()
-        st.success("Workout saved to database!")
+        st.success("Workout recorded successfully!")
     except Exception as e:
         st.error(f"Database Error: {e}")
 
@@ -250,7 +252,8 @@ def log_workout_tab():
             if not name.strip():
                 st.error("Please log in first.")
             else:
-                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time)
+                # Sets completed=False so it only goes to the dashboard
+                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, completed=False)
                 mark_active(name.strip())
                 
     with btn_col2:
@@ -258,7 +261,8 @@ def log_workout_tab():
             if not name.strip():
                 st.error("Please log in first.")
             else:
-                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time)
+                # Sets completed=True so it populates the Finished Workouts tab
+                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, completed=True)
                 mark_active(name.strip())
 
 def dashboard_tab():
@@ -318,8 +322,15 @@ def finished_workouts_tab():
         st.info("No finished workouts recorded yet.")
         return
 
+    # Filter out entries where completed flag is explicitly True
+    finished_entries = [w for w in workouts if w.get("completed") is True]
+
+    if not finished_entries:
+        st.info("No workouts finalized using 'Finish Workout' yet.")
+        return
+
     # Render a clean list displaying who did what workout
-    for entry in workouts:
+    for entry in finished_entries:
         person = entry.get("name", "Unknown")
         exercise = entry.get("exercise", "Unspecified")
         sets = entry.get("sets", 0)
@@ -327,7 +338,7 @@ def finished_workouts_tab():
         weight = entry.get("weight", 0.0)
         duration = entry.get("duration", 0.0)
         
-        st.write(f"✅ **{person}** finished: **{exercise}** — {sets} sets x {reps} reps @ {weight} lbs ({duration} mins)")
+        st.write(f"🏆 **{person}** finalized workout: **{exercise}** — {sets} sets x {reps} reps @ {weight} lbs ({duration} mins)")
 
 # 6. Main App Layout Router (Auth Guarded)
 st.title("RunItBack 🏃‍♂️")
