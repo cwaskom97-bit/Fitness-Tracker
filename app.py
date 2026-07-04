@@ -50,6 +50,18 @@ div.stButton > button[key*="finish_workout_action_btn"]:hover {
     color: white !important;
 }
 
+/* Make inline delete buttons look like clean clickable text links */
+div.stButton > button[key*="inline_del_"] {
+    background-color: transparent !important;
+    border: none !important;
+    color: #ff4b4b !important;
+    text-align: right !important;
+    height: auto !important;
+    padding: 0 !important;
+    width: auto !important;
+    font-size: 1em !important;
+}
+
 /* Unified circular crop layout structure */
 .profile-pic-round {
     width: 60px;
@@ -231,13 +243,23 @@ def log_workout_tab():
         
     rest_time = st.number_input("Rest Time (seconds):", min_value=0, value=60, step=5, key="workout_entry_rest")
 
-    # The green button style maps directly onto this key name
-    if st.button("Finish Workout", key="finish_workout_action_btn"):
-        if not name.strip():
-            st.error("Please log in first.")
-        else:
-            log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time)
-            mark_active(name.strip())
+    # Places standard "Log Workout" and green "Finish Workout" buttons side-by-side
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        if st.button("Log Workout", key="normal_log_workout_btn"):
+            if not name.strip():
+                st.error("Please log in first.")
+            else:
+                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time)
+                mark_active(name.strip())
+                
+    with btn_col2:
+        if st.button("Finish Workout", key="finish_workout_action_btn"):
+            if not name.strip():
+                st.error("Please log in first.")
+            else:
+                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time)
+                mark_active(name.strip())
 
 def dashboard_tab():
     st.subheader("Dashboard — Everyone's Stats")
@@ -258,16 +280,15 @@ def dashboard_tab():
         with st.expander(f"{person} — {len(entries)} workouts logged"):
             st.write(f"**Total Sets Tracked:** {total_sets}")
             for entry in entries:
-                log_text = f" {entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)"
+                log_text = f"{entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)"
                 
-                # Strict Ownership Check: Only show delete button if workout 'name' matches 'current_user'
+                # Strict Ownership Check: Only show delete text row split if workout belongs to you
                 if entry.get("name") == st.session_state.current_user:
-                    col_text, col_del = st.columns([0.9, 0.1])
+                    col_text, col_del = st.columns([0.92, 0.08])
                     col_text.write(log_text)
-                    if col_del.button("❌", key=f"del_{entry.get('id')}"):
+                    if col_del.button("❌", key=f"inline_del_{entry.get('id')}"):
                         delete_workout(entry.get('id'))
                 else:
-                    # Renders as standard text with no button for other users' entries
                     st.write(log_text)
 
 def active_users_tab():
