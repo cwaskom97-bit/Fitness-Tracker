@@ -2,8 +2,11 @@ import streamlit as st
 from supabase import create_client, Client
 from datetime import datetime, timedelta
 
-# 1. Page Configuration
+# 1. Page Configuration (Browser Tab Title and Icon)
 st.set_page_config(page_title="RunItBack", page_icon="🏃‍♂️", layout="centered")
+
+# Global App Header (Shows on every page/tab at the very top)
+st.title("RunItBack 🏃‍♂️")
 
 TIMEOUT_MINUTES = 10
 
@@ -96,84 +99,4 @@ def login_tab():
             st.success(f"{st.session_state.current_user} logged out.")
             st.session_state.current_user = None
             st.rerun()
-        else:
-            st.error("You are not currently logged in.")
-
-    if st.session_state.current_user:
-        st.info(f"Logged in as: **{st.session_state.current_user}**")
-
-def log_workout_tab():
-    st.subheader("Log a Workout")
-    name = st.text_input("Name:", value=st.session_state.current_user or "", key="workout_entry_name", disabled=True)
-    exercise = st.text_input("Exercise:", key="workout_entry_exercise")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        sets = st.number_input("Sets:", min_value=0, value=3, step=1, key="workout_entry_sets")
-        weight = st.number_input("Weight (lb):", min_value=0.0, value=0.0, step=5.0, key="workout_entry_weight")
-    with col2:
-        reps = st.number_input("Reps:", min_value=0, value=10, step=1, key="workout_entry_reps")
-        duration = st.number_input("Duration (min):", min_value=0.0, value=0.0, step=1.0, key="workout_entry_duration")
-        
-    rest_time = st.number_input("Rest Time (seconds):", min_value=0, value=60, step=5, key="workout_entry_rest")
-
-    if st.button("Log Workout", key="workout_submit_action_button"):
-        if not name.strip():
-            st.error("Please log in first.")
-        else:
-            log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time)
-            mark_active(name.strip()) # Sets user as active upon logging a workout
-
-def dashboard_tab():
-    st.subheader("Dashboard — Everyone's Stats")
-    if st.button("Refresh Dashboard", key="dashboard_manual_refresh_btn"):
-        st.rerun()
-
-    workouts = get_all_workouts()
-    if not workouts:
-        st.info("No logged workouts found.")
-        return
-
-    by_person = {}
-    for w in workouts:
-        by_person.setdefault(w.get("name", "Unknown"), []).append(w)
-
-    for person, entries in by_person.items():
-        total_sets = sum(int(e.get("sets", 0) or 0) for e in entries)
-        with st.expander(f"{person} — {len(entries)} workouts logged"):
-            st.write(f"**Total Sets Tracked:** {total_sets}")
-            for entry in entries:
-                st.write(f"- {entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)")
-
-def active_users_tab():
-    st.subheader("Who's Active Right Now")
-    if st.button("Refresh Active List", key="active_users_manual_refresh_btn"):
-        st.rerun()
-
-    active = get_active_users()
-    if not active:
-        st.info("No active users online.")
-        return
-
-    for user in active:
-        user_name = user.get("task_name", "Anonymous User")
-        st.write(f" 🔥 **{user_name}** is actively crushing it")
-
-# 6. Main App Layout Router (Auth Guarded)
-if st.session_state.current_user is None:
-    # If not logged in, user can only access the Login tab
-    tab1, = st.tabs(["Login"])
-    with tab1:
-        login_tab()
-        st.warning("Please log in to unlock the rest of the application features.")
-else:
-    # Full access granted once logged in
-    tab1, tab2, tab3, tab4 = st.tabs(["Login Status", "Log Workout", "Dashboard", "Active Users"])
-    with tab1:
-        login_tab()
-    with tab2:
-        log_workout_tab()
-    with tab3:
-        dashboard_tab()
-    with tab4:
-        active_users_tab()
+        else
