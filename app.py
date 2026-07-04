@@ -177,4 +177,4 @@ else:
     with tab3:
         dashboard_tab()
     with tab4:
-        active_users_tab()       
+        active_users_tab()
