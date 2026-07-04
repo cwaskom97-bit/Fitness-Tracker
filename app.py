@@ -99,4 +99,4 @@ def login_tab():
             st.success(f"{st.session_state.current_user} logged out.")
             st.session_state.current_user = None
             st.rerun()
-        else
+        else:
