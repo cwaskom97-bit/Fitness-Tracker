@@ -1,6 +1,6 @@
 import streamlit as st
-    from supabase import create_client, Client
-    from datetime import datetime, timedelta
+from supabase import create_client, Client
+from datetime import datetime, timedelta
     
     # 1. Page Configuration
     st.set_page_config(page_title=
