@@ -34,14 +34,8 @@ supabase = get_client()
 # 3. Session State
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
-if "otp_sent" not in st.session_state:
-    st.session_state.otp_sent = False
-if "login_email" not in st.session_state:
-    st.session_state.login_email = ""
-if "full_name" not in st.session_state:
-    st.session_state.full_name = ""
 
-# 4. Database & Auth Interactions
+# 4. Database Interactions
 def mark_active(name):
     try:
         supabase.table("tasks").upsert({"task_name": name, "task_date": datetime.utcnow().date().isoformat()}).execute()
@@ -97,69 +91,26 @@ def login_tab():
     st.subheader("Login / Registration")
     
     if not st.session_state.current_user:
-        if not st.session_state.otp_sent:
-            col_first, col_last = st.columns(2)
-            with col_first:
-                first_name = st.text_input("First Name", key="user_first_name")
-            with col_last:
-                last_name = st.text_input("Last Name", key="user_last_name")
-                
-            email = st.text_input("Enter your email", key="user_email_input")
+        col_first, col_last = st.columns(2)
+        with col_first:
+            first_name = st.text_input("First Name", key="user_first_name")
+        with col_last:
+            last_name = st.text_input("Last Name", key="user_last_name")
             
-            if st.button("Send Verification Code", key="send_otp_btn"):
-                if not first_name.strip() or not last_name.strip():
-                    st.error("Please enter both your first and last name.")
-                elif not email.strip():
-                    st.error("Please enter a valid email address.")
-                else:
-                    try:
-                        # Requests a numeric token code from Supabase
-                        supabase.auth.sign_in_with_otp({"email": email.strip(), "options": {"should_create_user": True}})
-                        st.session_state.login_email = email.strip()
-                        st.session_state.full_name = f"{first_name.strip()} {last_name.strip()}"
-                        st.session_state.otp_sent = True
-                        st.success(f"Verification code sent to {email.strip()}!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error sending code: {e}")
-        else:
-            st.info(f"Check your email: {st.session_state.login_email} (Registering as {st.session_state.full_name})")
-            token = st.text_input("Enter the 6-digit verification code", key="otp_token_input")
-            
-            col1, col2 = st.columns(2)
-            if col1.button("Verify & Log In", key="verify_otp_btn"):
-                if token.strip():
-                    try:
-                        # Checks token using signup verification context
-                        res = supabase.auth.verify_otp({"email": st.session_state.login_email, "token": token.strip(), "type": "signup"})
-                        st.session_state.current_user = st.session_state.full_name
-                        mark_active(st.session_state.current_user)
-                        st.success(f"Successfully logged in as {st.session_state.current_user}")
-                        st.rerun()
-                    except Exception as e:
-                        try:
-                            # Fallback check using user login verification context
-                            res = supabase.auth.verify_otp({"email": st.session_state.login_email, "token": token.strip(), "type": "login"})
-                            st.session_state.current_user = st.session_state.full_name
-                            mark_active(st.session_state.current_user)
-                            st.success(f"Successfully logged in as {st.session_state.current_user}")
-                            st.rerun()
-                        except Exception as ex:
-                            st.error("Invalid verification code. Please try again.")
-                else:
-                    st.error("Please enter the verification code.")
-                    
-            if col2.button("Change Info / Resend", key="reset_otp_flow_btn"):
-                st.session_state.otp_sent = False
+        if st.button("Log In", key="login_btn"):
+            if not first_name.strip() or not last_name.strip():
+                st.error("Please enter both your first and last name.")
+            else:
+                full_name = f"{first_name.strip()} {last_name.strip()}"
+                st.session_state.current_user = full_name
+                mark_active(full_name)
+                st.success(f"Successfully logged in as {full_name}")
                 st.rerun()
     else:
         st.info(f"Logged in as: **{st.session_state.current_user}**")
         if st.button("Log Out", key="action_logout_btn"):
             mark_inactive(st.session_state.current_user)
             st.session_state.current_user = None
-            st.session_state.otp_sent = False
-            st.session_state.login_email = ""
-            st.session_state.full_name = ""
             st.success("Logged out successfully.")
             st.rerun()
 
@@ -243,4 +194,3 @@ else:
         dashboard_tab()
     with tab4:
         active_users_tab()
-# 6. Main App Layout Router (Auth Guarded
