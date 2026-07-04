@@ -3,7 +3,7 @@ from supabase import create_client, Client
 from datetime import datetime, timedelta
 
 # 1. Page Configuration
-st.set_page_config(page_title="Workout Tracker", page_icon="", layout="centered")
+st.set_page_config(page_title="RunItBack", page_icon="🏃‍♂️", layout="centered")
 
 TIMEOUT_MINUTES = 10
 
@@ -60,16 +60,24 @@ def get_all_workouts():
     except Exception as e:
         return []
 
-def log_workout(name, exercise, sets, reps, weight, duration):
+def log_workout(name, exercise, sets, reps, weight, duration, rest_time):
     try:
-        supabase.table("Completions").insert({"name": name, "exercise": exercise or "Unspecified", "sets": sets, "reps": reps, "weight": weight, "duration": duration}).execute()
-        st.success(" Workout saved to database!")
+        supabase.table("Completions").insert({
+            "name": name, 
+            "exercise": exercise or "Unspecified", 
+            "sets": sets, 
+            "reps": reps, 
+            "weight": weight, 
+            "duration": duration,
+            "rest_time": rest_time
+        }).execute()
+        st.success("Workout saved to database!")
     except Exception as e:
-        st.error(f" Database Error: {e}")
+        st.error(f"Database Error: {e}")
 
 # 5. Interface Tabs
 def login_tab():
-    st.subheader("Login")
+    st.subheader("Login / Registration")
     name = st.text_input("Your name", key="user_login_input_field")
     col1, col2 = st.columns(2)
 
@@ -96,19 +104,25 @@ def login_tab():
 
 def log_workout_tab():
     st.subheader("Log a Workout")
-    name = st.text_input("Name:", value=st.session_state.current_user or "", key="workout_entry_name")
+    name = st.text_input("Name:", value=st.session_state.current_user or "", key="workout_entry_name", disabled=True)
     exercise = st.text_input("Exercise:", key="workout_entry_exercise")
-    sets = st.number_input("Sets:", min_value=0, value=3, step=1, key="workout_entry_sets")
-    reps = st.number_input("Reps:", min_value=0, value=10, step=1, key="workout_entry_reps")
-    weight = st.number_input("Weight (lb):", min_value=0.0, value=0.0, step=5.0, key="workout_entry_weight")
-    duration = st.number_input("Duration (min):", min_value=0.0, value=0.0, step=1.0, key="workout_entry_duration")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        sets = st.number_input("Sets:", min_value=0, value=3, step=1, key="workout_entry_sets")
+        weight = st.number_input("Weight (lb):", min_value=0.0, value=0.0, step=5.0, key="workout_entry_weight")
+    with col2:
+        reps = st.number_input("Reps:", min_value=0, value=10, step=1, key="workout_entry_reps")
+        duration = st.number_input("Duration (min):", min_value=0.0, value=0.0, step=1.0, key="workout_entry_duration")
+        
+    rest_time = st.number_input("Rest Time (seconds):", min_value=0, value=60, step=5, key="workout_entry_rest")
 
     if st.button("Log Workout", key="workout_submit_action_button"):
         if not name.strip():
-            st.error("Please enter a name.")
+            st.error("Please log in first.")
         else:
-            log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration)
-            mark_active(name.strip())
+            log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time)
+            mark_active(name.strip()) # Sets user as active upon logging a workout
 
 def dashboard_tab():
     st.subheader("Dashboard — Everyone's Stats")
@@ -126,8 +140,10 @@ def dashboard_tab():
 
     for person, entries in by_person.items():
         total_sets = sum(int(e.get("sets", 0) or 0) for e in entries)
-        with st.expander(f"{person} — {len(entries)} entries"):
-            st.write(f"Total Sets: {total_sets}")
+        with st.expander(f"{person} — {len(entries)} workouts logged"):
+            st.write(f"**Total Sets Tracked:** {total_sets}")
+            for entry in entries:
+                st.write(f"- {entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)")
 
 def active_users_tab():
     st.subheader("Who's Active Right Now")
@@ -141,15 +157,23 @@ def active_users_tab():
 
     for user in active:
         user_name = user.get("task_name", "Anonymous User")
-        st.write(f" **{user_name}** is online")
+        st.write(f" 🔥 **{user_name}** is actively crushing it")
 
-# 6. Main App Layout Router
-tab1, tab2, tab3, tab4 = st.tabs(["Login", "Log Workout", "Dashboard", "Active Users"])
-with tab1:
-    login_tab()
-with tab2:
-    log_workout_tab()
-with tab3:
-    dashboard_tab()
-with tab4:
-    active_users_tab()  
+# 6. Main App Layout Router (Auth Guarded)
+if st.session_state.current_user is None:
+    # If not logged in, user can only access the Login tab
+    tab1, = st.tabs(["Login"])
+    with tab1:
+        login_tab()
+        st.warning("Please log in to unlock the rest of the application features.")
+else:
+    # Full access granted once logged in
+    tab1, tab2, tab3, tab4 = st.tabs(["Login Status", "Log Workout", "Dashboard", "Active Users"])
+    with tab1:
+        login_tab()
+    with tab2:
+        log_workout_tab()
+    with tab3:
+        dashboard_tab()
+    with tab4:
+        active_users_tab()
