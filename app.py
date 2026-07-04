@@ -98,7 +98,6 @@ def login_tab():
     
     if not st.session_state.current_user:
         if not st.session_state.otp_sent:
-            # Added First and Last Name Inputs alongside Email
             col_first, col_last = st.columns(2)
             with col_first:
                 first_name = st.text_input("First Name", key="user_first_name")
@@ -114,12 +113,12 @@ def login_tab():
                     st.error("Please enter a valid email address.")
                 else:
                     try:
-                        # Request Supabase OTP
-                        supabase.auth.sign_in_with_otp({"email": email.strip()})
+                        # Explicitly requesting an OTP code signup/login token
+                        supabase.auth.sign_in_with_otp({"email": email.strip(), "options": {"should_create_user": True}})
                         st.session_state.login_email = email.strip()
                         st.session_state.full_name = f"{first_name.strip()} {last_name.strip()}"
                         st.session_state.otp_sent = True
-                        st.success(f"Verification code sent to {email.strip()}!")
+                        st.success(f"Verification numeric code sent to {email.strip()}!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error sending code: {e}")
@@ -131,15 +130,22 @@ def login_tab():
             if col1.button("Verify & Log In", key="verify_otp_btn"):
                 if token.strip():
                     try:
-                        # Verify the token against Supabase Auth
-                        res = supabase.auth.verify_otp({"email": st.session_state.login_email, "token": token.strip(), "type": "magiclink"})
-                        # Set the combined full name as the active username session profile
+                        # Changed verification type from 'magiclink' to 'signup' to process verification numeric tokens
+                        res = supabase.auth.verify_otp({"email": st.session_state.login_email, "token": token.strip(), "type": "signup"})
                         st.session_state.current_user = st.session_state.full_name
                         mark_active(st.session_state.current_user)
                         st.success(f"Successfully logged in as {st.session_state.current_user}")
                         st.rerun()
                     except Exception as e:
-                        st.error("Invalid verification code. Please try again.")
+                        # Fallback step check: If user already exists, verification type requires 'login' instead of 'signup'
+                        try:
+                            res = supabase.auth.verify_otp({"email": st.session_state.login_email, "token": token.strip(), "type": "login"})
+                            st.session_state.current_user = st.session_state.full_name
+                            mark_active(st.session_state.current_user)
+                            st.success(f"Successfully logged in as {st.session_state.current_user}")
+                            st.rerun()
+                        except Exception as ex:
+                            st.error("Invalid verification code. Please try again.")
                 else:
                     st.error("Please enter the verification code.")
                     
@@ -202,7 +208,6 @@ def dashboard_tab():
                 with col_data:
                     st.write(f"- {entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)")
                 
-                # Deletion security check
                 if entry.get("name") == st.session_state.current_user:
                     with col_action:
                         if st.button("❌ Delete", key=f"del_{entry.get('id')}"):
