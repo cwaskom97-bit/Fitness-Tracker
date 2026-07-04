@@ -6,9 +6,9 @@ import base64
 # 1. Page Configuration (Browser Tab Title and Icon)
 st.set_page_config(page_title="RunItBack", page_icon="🏃‍♂️", layout="centered")
 
-# Initialize Theme States Early
+# Initialize Theme States Early - Defaulting directly to Dark Mode
 if "theme_mode" not in st.session_state:
-    st.session_state.theme_mode = "Light"
+    st.session_state.theme_mode = "Dark"
 
 # Inject Runtime Theme configuration values
 if st.session_state.theme_mode == "Dark":
@@ -22,19 +22,34 @@ else:
     st._config.set_option("theme.secondaryBackgroundColor", "#F0F2F6")
     st._config.set_option("theme.textColor", "#31333F")
 
-# Mobile styling tweak for better buttons and smooth scrolling
+# Custom CSS Styling
 st.markdown("""
 <style>
 html, body, [data-testid="stAppViewContainer"] {
     overflow-y: auto !important;
     scroll-behavior: smooth;
 }
+
+/* Default standard button styling */
 div.stButton > button {
     width: 100%;
     height: 3em;
     font-size: 1.05em;
     border-radius: 10px;
 }
+
+/* Distinct styling targeting ONLY the Finish Workout button to make it green */
+div.stButton > button[key*="finish_workout_action_btn"] {
+    background-color: #28a745 !important;
+    color: white !important;
+    border: none !important;
+    font-weight: bold !important;
+}
+div.stButton > button[key*="finish_workout_action_btn"]:hover {
+    background-color: #218838 !important;
+    color: white !important;
+}
+
 /* Unified circular crop layout structure */
 .profile-pic-round {
     width: 60px;
@@ -82,6 +97,8 @@ if "current_user" not in st.session_state:
     st.session_state.current_user = None
 if "profile_pic" not in st.session_state:
     st.session_state.profile_pic = None
+
+TIMEOUT_MINUTES = 10
 
 # 4. Database Interactions
 def mark_active(name):
@@ -214,7 +231,8 @@ def log_workout_tab():
         
     rest_time = st.number_input("Rest Time (seconds):", min_value=0, value=60, step=5, key="workout_entry_rest")
 
-    if st.button("Log Workout", key="workout_submit_action_button"):
+    # The green button style maps directly onto this key name
+    if st.button("Finish Workout", key="finish_workout_action_btn"):
         if not name.strip():
             st.error("Please log in first.")
         else:
@@ -242,13 +260,14 @@ def dashboard_tab():
             for entry in entries:
                 log_text = f" {entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)"
                 
-                # If current user owns it, show deletion trailing 'x' on the far right edge cleanly
+                # Strict Ownership Check: Only show delete button if workout 'name' matches 'current_user'
                 if entry.get("name") == st.session_state.current_user:
                     col_text, col_del = st.columns([0.9, 0.1])
                     col_text.write(log_text)
                     if col_del.button("❌", key=f"del_{entry.get('id')}"):
                         delete_workout(entry.get('id'))
                 else:
+                    # Renders as standard text with no button for other users' entries
                     st.write(log_text)
 
 def active_users_tab():
@@ -267,8 +286,6 @@ def active_users_tab():
 
 # 6. Main App Layout Router (Auth Guarded)
 st.title("RunItBack 🏃‍♂️")
-
-TIMEOUT_MINUTES = 10
 
 if st.session_state.current_user is None:
     tab1, = st.tabs(["Login"])
