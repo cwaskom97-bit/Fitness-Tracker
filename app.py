@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
 from datetime import datetime, timedelta
+import base64
 
 # 1. Page Configuration (Browser Tab Title and Icon)
 st.set_page_config(page_title="RunItBack", page_icon="🏃‍♂️", layout="centered")
@@ -10,17 +11,44 @@ st.title("RunItBack 🏃‍♂️")
 
 TIMEOUT_MINUTES = 10
 
-# Mobile styling tweak
+# Mobile styling tweak for better buttons and smooth scrolling
 st.markdown("""
 <style>
+/* Smooth scrolling and containment for mobile viewports */
+html, body, [data-testid="stAppViewContainer"] {
+    overflow-y: auto !important;
+    scroll-behavior: smooth;
+}
+
 div.stButton > button {
-width: 100%;
-height: 3em;
-font-size: 1.05em;
-border-radius: 10px;
+    width: 100%;
+    height: 3em;
+    font-size: 1.05em;
+    border-radius: 10px;
+}
+
+/* Ensure uploaded image is neatly rounded and centered */
+.profile-pic-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+.profile-pic {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #ff4b4b;
 }
 </style>
 """, unsafe_allow_html=True)
+
+# Helper function to convert uploaded file to base64 for display/session storage
+def file_to_base64(uploaded_file):
+    if uploaded_file is not None:
+        file_bytes = uploaded_file.read()
+        return base64.b64encode(file_bytes).decode()
+    return None
 
 # 2. Database Initialization
 @st.cache_resource
@@ -34,6 +62,8 @@ supabase = get_client()
 # 3. Session State
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
+if "profile_pic" not in st.session_state:
+    st.session_state.profile_pic = None
 
 # 4. Database Interactions
 def mark_active(name):
@@ -97,20 +127,37 @@ def login_tab():
         with col_last:
             last_name = st.text_input("Last Name", key="user_last_name")
             
+        # Optional Profile Picture Uploader
+        uploaded_file = st.file_uploader("Upload Profile Picture", type=["png", "jpg", "jpeg"], key="user_profile_pic")
+        st.caption("(Optional)")
+            
         if st.button("Log In", key="login_btn"):
             if not first_name.strip() or not last_name.strip():
                 st.error("Please enter both your first and last name.")
             else:
                 full_name = f"{first_name.strip()} {last_name.strip()}"
                 st.session_state.current_user = full_name
+                
+                # Process the file if uploaded
+                if uploaded_file is not None:
+                    st.session_state.profile_pic = file_to_base64(uploaded_file)
+                
                 mark_active(full_name)
                 st.success(f"Successfully logged in as {full_name}")
                 st.rerun()
     else:
+        # Display profile picture if available
+        if st.session_state.profile_pic:
+            st.markdown(
+                f'<div class="profile-pic-container"><img class="profile-pic" src="data:image/png;base64,{st.session_state.profile_pic}"></div>', 
+                unsafe_allow_html=True
+            )
+            
         st.info(f"Logged in as: **{st.session_state.current_user}**")
         if st.button("Log Out", key="action_logout_btn"):
             mark_inactive(st.session_state.current_user)
             st.session_state.current_user = None
+            st.session_state.profile_pic = None
             st.success("Logged out successfully.")
             st.rerun()
 
