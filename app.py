@@ -6,49 +6,67 @@ import base64
 # 1. Page Configuration (Browser Tab Title and Icon)
 st.set_page_config(page_title="RunItBack", page_icon="🏃‍♂️", layout="centered")
 
-# Global App Header (Shows on every page/tab at the very top)
-st.title("RunItBack 🏃‍♂️")
+# Initialize Theme States Early
+if "theme_mode" not in st.session_state:
+    st.session_state.theme_mode = "Light"
 
-TIMEOUT_MINUTES = 10
+# Inject Runtime Theme configuration values
+if st.session_state.theme_mode == "Dark":
+    st._config.set_option("theme.base", "dark")
+    st._config.set_option("theme.backgroundColor", "#0E1117")
+    st._config.set_option("theme.secondaryBackgroundColor", "#262730")
+    st._config.set_option("theme.textColor", "#FAFAFA")
+else:
+    st._config.set_option("theme.base", "light")
+    st._config.set_option("theme.backgroundColor", "#FFFFFF")
+    st._config.set_option("theme.secondaryBackgroundColor", "#F0F2F6")
+    st._config.set_option("theme.textColor", "#31333F")
 
 # Mobile styling tweak for better buttons and smooth scrolling
 st.markdown("""
 <style>
-/* Smooth scrolling and containment for mobile viewports */
 html, body, [data-testid="stAppViewContainer"] {
     overflow-y: auto !important;
     scroll-behavior: smooth;
 }
-
 div.stButton > button {
     width: 100%;
     height: 3em;
     font-size: 1.05em;
     border-radius: 10px;
 }
-
-/* Ensure uploaded image is neatly rounded and centered */
-.profile-pic-container {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 20px;
-}
-.profile-pic {
-    width: 100px;
-    height: 100px;
+/* Unified circular crop layout structure */
+.profile-pic-round {
+    width: 60px;
+    height: 60px;
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid #ff4b4b;
+    display: inline-block;
+    vertical-align: middle;
+}
+.header-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+.header-name {
+    font-size: 1.3em;
+    font-weight: bold;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# Helper function to convert uploaded file to base64 for display/session storage
+# Helper function to convert uploaded file to base64
 def file_to_base64(uploaded_file):
     if uploaded_file is not None:
         file_bytes = uploaded_file.read()
         return base64.b64encode(file_bytes).decode()
     return None
+
+# Default generic placeholder avatar icon
+DEFAULT_AVATAR = "https://www.w3schools.com/howto/img_avatar.png"
 
 # 2. Database Initialization
 @st.cache_resource
@@ -59,7 +77,7 @@ def get_client() -> Client:
 
 supabase = get_client()
 
-# 3. Session State
+# 3. Session State Tracker
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
 if "profile_pic" not in st.session_state:
@@ -116,6 +134,35 @@ def delete_workout(workout_id):
     except Exception as e:
         st.error(f"Failed to delete workout: {e}")
 
+# Render User identity elements globally in the upper workspace when logged in
+if st.session_state.current_user:
+    with st.container():
+        img_src = f"data:image/png;base64,{st.session_state.profile_pic}" if st.session_state.profile_pic else DEFAULT_AVATAR
+        
+        st.markdown(f"""
+        <div class="header-container">
+            <img class="profile-pic-round" src="{img_src}">
+            <div class="header-name">{st.session_state.current_user}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Profile Configuration Expander (Edit Pic & Toggle Mode)
+        with st.expander("⚙️ Edit Profile / Settings"):
+            new_pic = st.file_uploader("Update Profile Picture", type=["png", "jpg", "jpeg"], key="update_avatar_input")
+            if new_pic:
+                st.session_state.profile_pic = file_to_base64(new_pic)
+                st.success("Profile photo updated!")
+                st.rerun()
+                
+            # Theme switcher
+            current_mode = st.session_state.theme_mode
+            theme_toggle = st.toggle("Dark Mode Active", value=(current_mode == "Dark"), key="theme_toggle_widget")
+            expected_mode = "Dark" if theme_toggle else "Light"
+            if expected_mode != current_mode:
+                st.session_state.theme_mode = expected_mode
+                st.rerun()
+        st.write("---")
+
 # 5. Interface Tabs
 def login_tab():
     st.subheader("Login / Registration")
@@ -127,7 +174,6 @@ def login_tab():
         with col_last:
             last_name = st.text_input("Last Name", key="user_last_name")
             
-        # Optional Profile Picture Uploader
         uploaded_file = st.file_uploader("Upload Profile Picture", type=["png", "jpg", "jpeg"], key="user_profile_pic")
         st.caption("(Optional)")
             
@@ -138,7 +184,6 @@ def login_tab():
                 full_name = f"{first_name.strip()} {last_name.strip()}"
                 st.session_state.current_user = full_name
                 
-                # Process the file if uploaded
                 if uploaded_file is not None:
                     st.session_state.profile_pic = file_to_base64(uploaded_file)
                 
@@ -146,13 +191,6 @@ def login_tab():
                 st.success(f"Successfully logged in as {full_name}")
                 st.rerun()
     else:
-        # Display profile picture if available
-        if st.session_state.profile_pic:
-            st.markdown(
-                f'<div class="profile-pic-container"><img class="profile-pic" src="data:image/png;base64,{st.session_state.profile_pic}"></div>', 
-                unsafe_allow_html=True
-            )
-            
         st.info(f"Logged in as: **{st.session_state.current_user}**")
         if st.button("Log Out", key="action_logout_btn"):
             mark_inactive(st.session_state.current_user)
@@ -202,14 +240,16 @@ def dashboard_tab():
         with st.expander(f"{person} — {len(entries)} workouts logged"):
             st.write(f"**Total Sets Tracked:** {total_sets}")
             for entry in entries:
-                col_data, col_action = st.columns([4, 1])
-                with col_data:
-                    st.write(f"- {entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)")
+                log_text = f" {entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)"
                 
+                # If current user owns it, show deletion trailing 'x' on the far right edge cleanly
                 if entry.get("name") == st.session_state.current_user:
-                    with col_action:
-                        if st.button("❌ Delete", key=f"del_{entry.get('id')}"):
-                            delete_workout(entry.get('id'))
+                    col_text, col_del = st.columns([0.9, 0.1])
+                    col_text.write(log_text)
+                    if col_del.button("❌", key=f"del_{entry.get('id')}"):
+                        delete_workout(entry.get('id'))
+                else:
+                    st.write(log_text)
 
 def active_users_tab():
     st.subheader("Who's Active Right Now")
@@ -226,6 +266,10 @@ def active_users_tab():
         st.write(f" 🔥 **{user_name}** is actively crushing it")
 
 # 6. Main App Layout Router (Auth Guarded)
+st.title("RunItBack 🏃‍♂️")
+
+TIMEOUT_MINUTES = 10
+
 if st.session_state.current_user is None:
     tab1, = st.tabs(["Login"])
     with tab1:
