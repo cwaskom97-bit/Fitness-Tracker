@@ -30,40 +30,42 @@ supabase = get_client()
 
 # 3. Session State
 if "current_user" not in st.session_state:
-    st.session_state.current_user = None
+st.session_state.current_user = None
 
-# 4. Database Interactions
+# 4. Database Interactions (Matching your actual tables)
 def mark_active(name):
-    try:
-        supabase.table("tasks").upsert({"task_name": name, "task_date": datetime.utcnow().date().isoformat()}).execute()
-    except Exception as e:
-        st.error(f" Login Error (tasks table): {e}")
+try:
+supabase.table("tasks").upsert({"task_name": name, "task_date": datetime.utcnow().date().isoformat()}).execute()
+except Exception as e:
+pass
 
 def mark_inactive(name):
-    try:
-        supabase.table("tasks").delete().eq("task_name", name).execute()
-    except Exception as e:
-        st.error(f" Logout Error (tasks table): {e}")
+try:
+supabase.table("tasks").delete().eq("task_name", name).execute()
+except Exception as e:
+pass
 
 def get_active_users():
-    try:
-        cutoff = (datetime.utcnow() - timedelta(minutes=TIMEOUT_MINUTES)).date().isoformat()
-        res = supabase.table("tasks").select("*").gte("task_date", cutoff).execute()
-        return res.data if hasattr(res, 'data') else []
-    except Exception as e:
-        st.error(f" Error fetching active users: {e}")
-        return []
+try:
+cutoff = (datetime.utcnow() - timedelta(minutes=TIMEOUT_MINUTES)).date().isoformat()
+res = supabase.table("tasks").select("*").gte("task_date", cutoff).execute()
+return res.data if hasattr(res, 'data') else []
+except Exception as e:
+return []
 
 def get_all_workouts():
-    try:
-        res = supabase.table("Completions").select("*").execute()
-        return res.data if hasattr(res, 'data') else []
-    except Exception as e:
-        st.error(f" Dashboard Error (Completions table): {e}")
-        return []
+try:
+res = supabase.table("Completions").select("*").execute()
+return res.data if hasattr(res, 'data') else []
+except Exception as e:
+return []
 
 def log_workout(name, exercise, sets, reps, weight, duration):
-    try:
+try:
+supabase.table("Completions").insert({"name": name, "exercise": exercise or "Unspecified", "sets": sets, "reps": reps, "weight": weight, "duration": duration}).execute()
+st.success("Workout saved to database!")
+except Exception as e:
+st.sidebar.error(f"⚠️ Workout Error: {e}")    try:
         supabase.table("Completions").insert({"name": name, "exercise": exercise or "Unspecified", "sets": sets, "reps": reps, "weight": weight, "duration": duration}).execute()
         st.success("Workout saved to database!")
     except Exception as e:
