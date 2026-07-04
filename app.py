@@ -38,6 +38,8 @@ if "otp_sent" not in st.session_state:
     st.session_state.otp_sent = False
 if "login_email" not in st.session_state:
     st.session_state.login_email = ""
+if "full_name" not in st.session_state:
+    st.session_state.full_name = ""
 
 # 4. Database & Auth Interactions
 def mark_active(name):
@@ -96,22 +98,33 @@ def login_tab():
     
     if not st.session_state.current_user:
         if not st.session_state.otp_sent:
+            # Added First and Last Name Inputs alongside Email
+            col_first, col_last = st.columns(2)
+            with col_first:
+                first_name = st.text_input("First Name", key="user_first_name")
+            with col_last:
+                last_name = st.text_input("Last Name", key="user_last_name")
+                
             email = st.text_input("Enter your email", key="user_email_input")
+            
             if st.button("Send Verification Code", key="send_otp_btn"):
-                if email.strip():
+                if not first_name.strip() or not last_name.strip():
+                    st.error("Please enter both your first and last name.")
+                elif not email.strip():
+                    st.error("Please enter a valid email address.")
+                else:
                     try:
                         # Request Supabase OTP
                         supabase.auth.sign_in_with_otp({"email": email.strip()})
                         st.session_state.login_email = email.strip()
+                        st.session_state.full_name = f"{first_name.strip()} {last_name.strip()}"
                         st.session_state.otp_sent = True
                         st.success(f"Verification code sent to {email.strip()}!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error sending code: {e}")
-                else:
-                    st.error("Please enter a valid email address.")
         else:
-            st.info(f"Sending code to: {st.session_state.login_email}")
+            st.info(f"Sending code to: {st.session_state.login_email} (Registering as {st.session_state.full_name})")
             token = st.text_input("Enter the 6-digit verification code", key="otp_token_input")
             
             col1, col2 = st.columns(2)
@@ -120,7 +133,8 @@ def login_tab():
                     try:
                         # Verify the token against Supabase Auth
                         res = supabase.auth.verify_otp({"email": st.session_state.login_email, "token": token.strip(), "type": "magiclink"})
-                        st.session_state.current_user = st.session_state.login_email
+                        # Set the combined full name as the active username session profile
+                        st.session_state.current_user = st.session_state.full_name
                         mark_active(st.session_state.current_user)
                         st.success(f"Successfully logged in as {st.session_state.current_user}")
                         st.rerun()
@@ -129,7 +143,7 @@ def login_tab():
                 else:
                     st.error("Please enter the verification code.")
                     
-            if col2.button("Change Email / Resend", key="reset_otp_flow_btn"):
+            if col2.button("Change Info / Resend", key="reset_otp_flow_btn"):
                 st.session_state.otp_sent = False
                 st.rerun()
     else:
@@ -139,6 +153,7 @@ def login_tab():
             st.session_state.current_user = None
             st.session_state.otp_sent = False
             st.session_state.login_email = ""
+            st.session_state.full_name = ""
             st.success("Logged out successfully.")
             st.rerun()
 
@@ -187,10 +202,9 @@ def dashboard_tab():
                 with col_data:
                     st.write(f"- {entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)")
                 
-                # Deletion security filter: check if the logged row owner matches the current session user
+                # Deletion security check
                 if entry.get("name") == st.session_state.current_user:
                     with col_action:
-                        # Assumes your database table row has a primary key named 'id'
                         if st.button("❌ Delete", key=f"del_{entry.get('id')}"):
                             delete_workout(entry.get('id'))
 
