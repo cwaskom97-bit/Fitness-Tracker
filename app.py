@@ -282,9 +282,9 @@ def dashboard_tab():
             for entry in entries:
                 log_text = f"{entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)"
                 
-                # Strict Ownership Check: Only show delete text row split if workout belongs to you
+                # Ownership verification: button renders inline ONLY if logged in name matches the workout log
                 if entry.get("name") == st.session_state.current_user:
-                    col_text, col_del = st.columns([0.92, 0.08])
+                    col_text, col_del = st.columns([0.90, 0.10])
                     col_text.write(log_text)
                     if col_del.button("❌", key=f"inline_del_{entry.get('id')}"):
                         delete_workout(entry.get('id'))
