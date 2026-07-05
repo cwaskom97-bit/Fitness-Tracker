@@ -243,10 +243,10 @@ def login_tab():
         st.write("---")
         st.markdown("#### Enter Hub Code or Create Hub")
         
-        # 1. Hub Code input box on TOP
+        # Enter Hub Code input box on TOP
         join_hub_code = st.text_input("Enter Hub Code", key="join_hub_input").strip().upper()
         
-        # 2. Side-by-side action buttons at the BOTTOM
+        # Side-by-side action buttons at the BOTTOM
         col_btn1, col_btn2 = st.columns(2)
         
         with col_btn1:
@@ -256,9 +256,9 @@ def login_tab():
                 elif not join_hub_code:
                     st.error("Please type a Hub Code to log into.")
                 else:
-                    # Check if hub code exists in database before proceeding
+                    # Validate if the hub code exists in the database tables
                     if not verify_hub_exists(join_hub_code):
-                        st.error("❌ No code exists for this hub")
+                        st.error("Hub code entered does not exist")
                     else:
                         st.session_state.hub_code = join_hub_code
                         full_name = f"{first_name.strip().title()} {last_name.strip().title()}"
