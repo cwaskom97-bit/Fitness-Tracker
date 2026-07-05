@@ -2,6 +2,8 @@ import streamlit as st
 from supabase import create_client, Client
 from datetime import datetime, timedelta
 import base64
+import random
+import string
 
 # 1. Page Configuration (Browser Tab Title and Icon)
 st.set_page_config(page_title="RunItBack", page_icon="🏃‍♂️", layout="centered")
@@ -9,6 +11,8 @@ st.set_page_config(page_title="RunItBack", page_icon="🏃‍♂️", layout="ce
 # Initialize Theme States Early - Defaulting directly to Dark Mode
 if "theme_mode" not in st.session_state:
     st.session_state.theme_mode = "Dark"
+if "hub_code" not in st.session_state:
+    st.session_state.hub_code = None
 
 # Inject Runtime Theme configuration values
 if st.session_state.theme_mode == "Dark":
@@ -92,6 +96,10 @@ def file_to_base64(uploaded_file):
         return base64.b64encode(file_bytes).decode()
     return None
 
+# Helper to generate a random unique Hub Code
+def generate_hub_code():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
 # Default generic placeholder avatar icon
 DEFAULT_AVATAR = "https://www.w3schools.com/howto/img_avatar.png"
 
@@ -112,36 +120,39 @@ if "profile_pic" not in st.session_state:
 
 TIMEOUT_MINUTES = 10
 
-# 4. Database Interactions
-def mark_active(name):
+# 4. Database Interactions (Updated to filter using hub_code)
+def mark_active(name, hub_code):
     try:
-        supabase.table("tasks").upsert({"task_name": name, "task_date": datetime.utcnow().date().isoformat()}).execute()
+        supabase.table("tasks").upsert({
+            "task_name": name, 
+            "task_date": datetime.utcnow().date().isoformat(),
+            "hub_code": hub_code
+        }).execute()
     except Exception as e:
         pass
 
-def mark_inactive(name):
+def mark_inactive(name, hub_code):
     try:
-        supabase.table("tasks").delete().eq("task_name", name).execute()
+        supabase.table("tasks").delete().eq("task_name", name).eq("hub_code", hub_code).execute()
     except Exception as e:
         pass
 
-def get_active_users():
+def get_active_users(hub_code):
     try:
         cutoff = (datetime.utcnow() - timedelta(minutes=TIMEOUT_MINUTES)).date().isoformat()
-        res = supabase.table("tasks").select("*").gte("task_date", cutoff).execute()
+        res = supabase.table("tasks").select("*").gte("task_date", cutoff).eq("hub_code", hub_code).execute()
         return res.data if hasattr(res, 'data') else []
     except Exception as e:
         return []
 
-def get_all_workouts():
+def get_all_workouts(hub_code):
     try:
-        res = supabase.table("Completions").select("*").execute()
+        res = supabase.table("Completions").select("*").eq("hub_code", hub_code).execute()
         return res.data if hasattr(res, 'data') else []
     except Exception as e:
         return []
 
-# Updated log_workout function signature to handle a "completed" state flag
-def log_workout(name, exercise, sets, reps, weight, duration, rest_time, completed=False):
+def log_workout(name, exercise, sets, reps, weight, duration, rest_time, hub_code, completed=False):
     try:
         supabase.table("Completions").insert({
             "name": name, 
@@ -151,7 +162,8 @@ def log_workout(name, exercise, sets, reps, weight, duration, rest_time, complet
             "weight": weight, 
             "duration": duration,
             "rest_time": rest_time,
-            "completed": completed # Sent to Supabase to filter finished status
+            "completed": completed,
+            "hub_code": hub_code
         }).execute()
         st.success("Workout recorded successfully!")
     except Exception as e:
@@ -165,7 +177,7 @@ def delete_workout(workout_id):
     except Exception as e:
         st.error(f"Failed to delete workout: {e}")
 
-# Render User identity elements globally in the upper workspace when logged in
+# Render User identity elements globally when logged in
 if st.session_state.current_user:
     with st.container():
         img_src = f"data:image/png;base64,{st.session_state.profile_pic}" if st.session_state.profile_pic else DEFAULT_AVATAR
@@ -177,8 +189,12 @@ if st.session_state.current_user:
         </div>
         """, unsafe_allow_html=True)
         
-        # Profile Configuration Expander (Edit Pic & Toggle Mode)
+        # Profile Configuration Expander (Edit Pic, Theme, and View Hub Code)
         with st.expander("⚙️ Edit Profile / Settings"):
+            st.info(f"🔑 **Your Shareable Hub Code:** `{st.session_state.hub_code}`")
+            st.caption("Share this code with your friends so they can join your isolated server workspace!")
+            st.write("---")
+            
             new_pic = st.file_uploader("Update Profile Picture", type=["png", "jpg", "jpeg"], key="update_avatar_input")
             if new_pic:
                 st.session_state.profile_pic = file_to_base64(new_pic)
@@ -207,27 +223,56 @@ def login_tab():
             
         uploaded_file = st.file_uploader("Upload Profile Picture", type=["png", "jpg", "jpeg"], key="user_profile_pic")
         st.caption("(Optional)")
-            
-        if st.button("Log In", key="login_btn"):
-            if not first_name.strip() or not last_name.strip():
-                st.error("Please enter both your first and last name.")
-            else:
-                # Capitalize and clean name inputs perfectly to enforce a unified scheme
-                full_name = f"{first_name.strip().title()} {last_name.strip().title()}"
-                st.session_state.current_user = full_name
-                
-                if uploaded_file is not None:
-                    st.session_state.profile_pic = file_to_base64(uploaded_file)
-                
-                mark_active(full_name)
-                st.success(f"Successfully logged in as {full_name}")
-                st.rerun()
+        
+        st.write("---")
+        st.markdown("#### Choose Your Space")
+        
+        # Hub Code input box for users wanting to join an existing workspace
+        join_hub_code = st.text_input("Enter Hub Code to Join (Leave blank if creating a new one)", key="join_hub_input").strip().upper()
+        
+        col_btn1, col_btn2 = st.columns(2)
+        
+        with col_btn1:
+            if st.button("✨ Create New Hub", key="create_hub_btn"):
+                if not first_name.strip() or not last_name.strip():
+                    st.error("Please enter both your first and last name first.")
+                else:
+                    generated_code = generate_hub_code()
+                    st.session_state.hub_code = generated_code
+                    full_name = f"{first_name.strip().title()} {last_name.strip().title()}"
+                    st.session_state.current_user = full_name
+                    
+                    if uploaded_file is not None:
+                        st.session_state.profile_pic = file_to_base64(uploaded_file)
+                    
+                    mark_active(full_name, generated_code)
+                    st.success(f"Created Hub `{generated_code}` successfully!")
+                    st.rerun()
+                    
+        with col_btn2:
+            if st.button("Log In / Join Hub", key="login_btn"):
+                if not first_name.strip() or not last_name.strip():
+                    st.error("Please enter both your first and last name.")
+                elif not join_hub_code:
+                    st.error("Please enter a valid Hub Code to join, or click 'Create New Hub'.")
+                else:
+                    st.session_state.hub_code = join_hub_code
+                    full_name = f"{first_name.strip().title()} {last_name.strip().title()}"
+                    st.session_state.current_user = full_name
+                    
+                    if uploaded_file is not None:
+                        st.session_state.profile_pic = file_to_base64(uploaded_file)
+                    
+                    mark_active(full_name, join_hub_code)
+                    st.success(f"Successfully joined Hub {join_hub_code} as {full_name}")
+                    st.rerun()
     else:
-        st.info(f"Logged in as: **{st.session_state.current_user}**")
+        st.info(f"Logged in as: **{st.session_state.current_user}** (Hub: `{st.session_state.hub_code}`)")
         if st.button("Log Out", key="action_logout_btn"):
-            mark_inactive(st.session_state.current_user)
+            mark_inactive(st.session_state.current_user, st.session_state.hub_code)
             st.session_state.current_user = None
             st.session_state.profile_pic = None
+            st.session_state.hub_code = None
             st.success("Logged out successfully.")
             st.rerun()
 
@@ -252,27 +297,25 @@ def log_workout_tab():
             if not name.strip():
                 st.error("Please log in first.")
             else:
-                # Sets completed=False so it only goes to the dashboard
-                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, completed=False)
-                mark_active(name.strip())
+                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=False)
+                mark_active(name.strip(), st.session_state.hub_code)
                 
     with btn_col2:
         if st.button("Finish Workout", key="finish_workout_action_btn"):
             if not name.strip():
                 st.error("Please log in first.")
             else:
-                # Sets completed=True so it populates the Finished Workouts tab
-                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, completed=True)
-                mark_active(name.strip())
+                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=True)
+                mark_active(name.strip(), st.session_state.hub_code)
 
 def dashboard_tab():
-    st.subheader("Dashboard — Everyone's Stats")
+    st.subheader(f"Hub Dashboard — Hub: {st.session_state.hub_code}")
     if st.button("Refresh Dashboard", key="dashboard_manual_refresh_btn"):
         st.rerun()
 
-    workouts = get_all_workouts()
+    workouts = get_all_workouts(st.session_state.hub_code)
     if not workouts:
-        st.info("No logged workouts found.")
+        st.info("No logged workouts found in this Hub.")
         return
 
     by_person = {}
@@ -286,7 +329,6 @@ def dashboard_tab():
             for entry in entries:
                 log_text = f"{entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)"
                 
-                # Dynamic matching logic: Checks if either name contains the other to prevent strict mismatch locks
                 db_name = str(entry.get("name", "")).strip().lower()
                 session_name = str(st.session_state.current_user or "").strip().lower()
                 
@@ -299,13 +341,13 @@ def dashboard_tab():
                     st.write(log_text)
 
 def active_users_tab():
-    st.subheader("Who's Active Right Now")
+    st.subheader("Who's Active in this Hub")
     if st.button("Refresh Active List", key="active_users_manual_refresh_btn"):
         st.rerun()
 
-    active = get_active_users()
+    active = get_active_users(st.session_state.hub_code)
     if not active:
-        st.info("No active users online.")
+        st.info("No active users online in this Hub.")
         return
 
     for user in active:
@@ -317,19 +359,17 @@ def finished_workouts_tab():
     if st.button("Refresh Workouts", key="finished_workouts_refresh_btn"):
         st.rerun()
 
-    workouts = get_all_workouts()
+    workouts = get_all_workouts(st.session_state.hub_code)
     if not workouts:
         st.info("No finished workouts recorded yet.")
         return
 
-    # Filter out entries where completed flag is explicitly True
     finished_entries = [w for w in workouts if w.get("completed") is True]
 
     if not finished_entries:
         st.info("No workouts finalized using 'Finish Workout' yet.")
         return
 
-    # Render a clean list displaying who did what workout
     for entry in finished_entries:
         person = entry.get("name", "Unknown")
         exercise = entry.get("exercise", "Unspecified")
@@ -347,7 +387,7 @@ if st.session_state.current_user is None:
     tab1, = st.tabs(["Login"])
     with tab1:
         login_tab()
-        st.warning("Please log in to unlock the rest of the application features.")
+        st.warning("Please log in or create a Hub to unlock features.")
 else:
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Login Status", "Log Workout", "Dashboard", "Active Users", "Finished Workouts"])
     with tab1:
