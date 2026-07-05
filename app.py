@@ -4,78 +4,16 @@ from datetime import datetime, timedelta
 import base64
 import random
 import string
-import stripe
 
 # ==========================================
-# 1. Page Configuration & Stripe Init
+# 1. Page Configuration
 # ==========================================
 st.set_page_config(page_title="RunItBack", page_icon="🏃‍♂️", layout="centered")
 
-# Initialize Stripe key from secrets
-stripe.api_key = st.secrets["stripe_api_key_test"]
-checkout_url = st.secrets["stripe_link_test"]
-
-# ==========================================
-# 2. EMAIL-BASED SUBSCRIPTION GATE
-# ==========================================
 st.title("RunItBack 🏃‍♂️")
 
-# Track if the subscription has been verified via email
-if "verified_email" not in st.session_state:
-    st.session_state.verified_email = None
-
-# Function to check Stripe API for an active customer subscription
-def has_active_subscription(email):
-    try:
-        # Search Stripe for a customer with this email
-        customers = stripe.Customer.list(email=email, limit=1)
-        if not customers.data:
-            return False
-        
-        customer_id = customers.data[0].id
-        # Look for active subscriptions for this customer
-        subscriptions = stripe.Subscription.list(customer=customer_id, status="active", limit=1)
-        return len(subscriptions.data) > 0
-    except Exception as e:
-        st.error(f"Error checking subscription status: {e}")
-        return False
-
-# If not verified yet, force the subscription gate screen
-if not st.session_state.verified_email:
-    st.subheader("Welcome to Premium Fitness Tracking")
-    st.write("Please verify your account email to access your Hub dashboard.")
-    
-    input_email = st.text_input("Enter your subscription email:", key="gate_email_input").strip().lower()
-    
-    col_auth, col_sub = st.columns(2)
-    
-    with col_auth:
-        if st.button("Verify Membership", key="verify_email_btn"):
-            if not input_email:
-                st.error("Please enter a valid email address.")
-            elif has_active_subscription(input_email):
-                st.session_state.verified_email = input_email
-                st.success("Access Granted! Welcome back.")
-                st.rerun()
-            else:
-                st.error("No active premium membership found for this email address.")
-                
-    with col_sub:
-        # Render customized Stripe payment link button if they haven't paid
-        st.markdown(
-            f'<a href="{checkout_url}" target="_blank">'
-            '<button style="background-color:#635BFF;color:white;padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:16px;width:100%;font-weight:bold;margin-top:0px;">'
-            '💳 Subscribe via Stripe'
-            '</button></a>', 
-            unsafe_allow_html=True
-        )
-    st.stop()  # Lock down everything past this point
-
-# Retrieve verified email context safely
-auth_email = st.session_state.verified_email
-
 # ==========================================
-# 3. PREMIUM APP LOADED (User Verified)
+# 2. APP THEME & INITIALIZATION
 # ==========================================
 
 # Initialize Theme States Early - Defaulting directly to Dark Mode
@@ -190,7 +128,9 @@ if "profile_pic" not in st.session_state:
 
 TIMEOUT_MINUTES = 10
 
-# Database Interactions
+# ==========================================
+# 3. DATABASE INTERACTIONS
+# ==========================================
 def verify_hub_exists(hub_code):
     try:
         res_comp = supabase.table("Completions").select("hub_code").eq("hub_code", hub_code).limit(1).execute()
@@ -292,7 +232,9 @@ if st.session_state.current_user:
                 st.rerun()
         st.write("---")
 
-# Interface Tabs Definitions
+# ==========================================
+# 4. INTERFACE TABS DEFINITIONS
+# ==========================================
 def login_tab():
     st.subheader("Hub Selection / Profile Creation")
     
@@ -348,13 +290,11 @@ def login_tab():
                     st.error(f"Error saving new Hub to database: {e}")
     else:
         st.info(f"Logged in as: **{st.session_state.current_user}** (Hub: `{st.session_state.hub_code}`)")
-        st.caption(f"Linked Subscription Email: {auth_email}")
-        if st.button("Log Out / Change Email", key="action_logout_btn"):
+        if st.button("Log Out", key="action_logout_btn"):
             mark_inactive(st.session_state.current_user, st.session_state.hub_code)
             st.session_state.current_user = None
             st.session_state.profile_pic = None
             st.session_state.hub_code = None
-            st.session_state.verified_email = None
             st.success("Logged out successfully.")
             st.rerun()
 
@@ -462,11 +402,11 @@ def finished_workouts_tab():
         
         st.write(f"🏆 **{person}** finalized workout: **{exercise}** — {sets} sets x {reps} reps @ {weight} lbs ({duration} mins)")
 
-# Router logic for the unlocked app layout
-st.caption(f"Verified Member Access: {auth_email}")
-
+# ==========================================
+# 5. APP ROUTER NAVIGATION LOGIC
+# ==========================================
 if st.session_state.current_user is None:
-    tab1, = st.tabs(["Hub Hub Registration"])
+    tab1, = st.tabs(["Hub Registration"])
     with tab1:
         login_tab()
         st.warning("Please join or create a workout Hub to unlock tracking options.")
