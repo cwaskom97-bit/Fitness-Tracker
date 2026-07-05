@@ -120,7 +120,7 @@ if "profile_pic" not in st.session_state:
 
 TIMEOUT_MINUTES = 10
 
-# 4. Database Interactions (Updated to filter using hub_code)
+# 4. Database Interactions (Filtered using hub_code)
 def mark_active(name, hub_code):
     try:
         supabase.table("tasks").upsert({
@@ -189,10 +189,10 @@ if st.session_state.current_user:
         </div>
         """, unsafe_allow_html=True)
         
-        # Profile Configuration Expander (Edit Pic, Theme, and View Hub Code)
+        # Profile Configuration Expander
         with st.expander("⚙️ Edit Profile / Settings"):
-            st.info(f"🔑 **Your Shareable Hub Code:** `{st.session_state.hub_code}`")
-            st.caption("Share this code with your friends so they can join your isolated server workspace!")
+            st.info(f"🔑 **Your Shared Hub Code:** `{st.session_state.hub_code}`")
+            st.caption("This matches the Hub Code entered at the login window.")
             st.write("---")
             
             new_pic = st.file_uploader("Update Profile Picture", type=["png", "jpg", "jpeg"], key="update_avatar_input")
@@ -225,37 +225,27 @@ def login_tab():
         st.caption("(Optional)")
         
         st.write("---")
-        st.markdown("#### Choose Your Space")
+        st.markdown("#### Hub Settings")
         
-        # Hub Code input box for users wanting to join an existing workspace
-        join_hub_code = st.text_input("Enter Hub Code to Join (Leave blank if creating a new one)", key="join_hub_input").strip().upper()
+        # Text input where whatever the user inputs becomes their profile hub code
+        join_hub_code = st.text_input("Enter Hub Code", key="join_hub_input").strip().upper()
         
         col_btn1, col_btn2 = st.columns(2)
         
         with col_btn1:
-            if st.button("✨ Create New Hub", key="create_hub_btn"):
-                if not first_name.strip() or not last_name.strip():
-                    st.error("Please enter both your first and last name first.")
-                else:
-                    generated_code = generate_hub_code()
-                    st.session_state.hub_code = generated_code
-                    full_name = f"{first_name.strip().title()} {last_name.strip().title()}"
-                    st.session_state.current_user = full_name
-                    
-                    if uploaded_file is not None:
-                        st.session_state.profile_pic = file_to_base64(uploaded_file)
-                    
-                    mark_active(full_name, generated_code)
-                    st.success(f"Created Hub `{generated_code}` successfully!")
-                    st.rerun()
+            if st.button("✨ Create Hub", key="create_hub_btn"):
+                # Simply generates a code, alerts the user, and does NOT log them in.
+                new_code = generate_hub_code()
+                st.success(f"🎉 Hub Created! Use Code: **{new_code}** to log in below.")
                     
         with col_btn2:
-            if st.button("Log In / Join Hub", key="login_btn"):
+            if st.button("Log In", key="login_btn"):
                 if not first_name.strip() or not last_name.strip():
                     st.error("Please enter both your first and last name.")
                 elif not join_hub_code:
-                    st.error("Please enter a valid Hub Code to join, or click 'Create New Hub'.")
+                    st.error("Please type a Hub Code to log into.")
                 else:
+                    # Captures the text input directly as the profile's active hub code
                     st.session_state.hub_code = join_hub_code
                     full_name = f"{first_name.strip().title()} {last_name.strip().title()}"
                     st.session_state.current_user = full_name
@@ -264,7 +254,7 @@ def login_tab():
                         st.session_state.profile_pic = file_to_base64(uploaded_file)
                     
                     mark_active(full_name, join_hub_code)
-                    st.success(f"Successfully joined Hub {join_hub_code} as {full_name}")
+                    st.success(f"Logged into Hub {join_hub_code} successfully!")
                     st.rerun()
     else:
         st.info(f"Logged in as: **{st.session_state.current_user}** (Hub: `{st.session_state.hub_code}`)")
