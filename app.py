@@ -16,19 +16,13 @@ stripe.api_key = st.secrets["stripe_api_key_test"]
 checkout_url = st.secrets["stripe_link_test"]
 
 # ==========================================
-# 2. MANDATORY AUTHENTICATION & STRIPE GATE
+# 2. EMAIL-BASED SUBSCRIPTION GATE
 # ==========================================
-# Force login using Streamlit's built-in OAuth service
-if not st.user:
-    st.title("RunItBack 🏃‍♂️")
-    st.subheader("Welcome to Premium Fitness Tracking")
-    st.write("Please log in with your Streamlit account to check your subscription status.")
-    if st.button("Log In / Register Account"):
-        st.login()
-    st.stop()  # Stop completely until logged in
+st.title("RunItBack 🏃‍♂️")
 
-# Retrieve the authenticated user's email safely
-auth_email = st.user.get("email")
+# Track if the subscription has been verified via email
+if "verified_email" not in st.session_state:
+    st.session_state.verified_email = None
 
 # Function to check Stripe API for an active customer subscription
 def has_active_subscription(email):
@@ -46,22 +40,39 @@ def has_active_subscription(email):
         st.error(f"Error checking subscription status: {e}")
         return False
 
-# Evaluate if user has paid
-if not has_active_subscription(auth_email):
-    st.title("🔒 Subscription Required")
-    st.warning(f"The account ({auth_email}) does not have an active premium membership.")
-    st.write("To unlock full access to RunItBack, please complete your subscription below:")
+# If not verified yet, force the subscription gate screen
+if not st.session_state.verified_email:
+    st.subheader("Welcome to Premium Fitness Tracking")
+    st.write("Please verify your account email to access your Hub dashboard.")
     
-    # Render customized Stripe payment link button
-    st.markdown(
-        f'<a href="{checkout_url}" target="_blank">'
-        '<button style="background-color:#635BFF;color:white;padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:16px;width:100%;font-weight:bold;">'
-        '💳 Subscribe Now via Stripe'
-        '</button></a>', 
-        unsafe_allow_html=True
-    )
-    st.info("💡 Once payment is finalized, return here and refresh the page to unlock your dashboard.")
-    st.stop()  # Lock down the app features until subscription passes
+    input_email = st.text_input("Enter your subscription email:", key="gate_email_input").strip().lower()
+    
+    col_auth, col_sub = st.columns(2)
+    
+    with col_auth:
+        if st.button("Verify Membership", key="verify_email_btn"):
+            if not input_email:
+                st.error("Please enter a valid email address.")
+            elif has_active_subscription(input_email):
+                st.session_state.verified_email = input_email
+                st.success("Access Granted! Welcome back.")
+                st.rerun()
+            else:
+                st.error("No active premium membership found for this email address.")
+                
+    with col_sub:
+        # Render customized Stripe payment link button if they haven't paid
+        st.markdown(
+            f'<a href="{checkout_url}" target="_blank">'
+            '<button style="background-color:#635BFF;color:white;padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:16px;width:100%;font-weight:bold;margin-top:0px;">'
+            '💳 Subscribe via Stripe'
+            '</button></a>', 
+            unsafe_allow_html=True
+        )
+    st.stop()  # Lock down everything past this point
+
+# Retrieve verified email context safely
+auth_email = st.session_state.verified_email
 
 # ==========================================
 # 3. PREMIUM APP LOADED (User Verified)
@@ -182,12 +193,10 @@ TIMEOUT_MINUTES = 10
 # Database Interactions
 def verify_hub_exists(hub_code):
     try:
-        # Check if code exists in Completions table
         res_comp = supabase.table("Completions").select("hub_code").eq("hub_code", hub_code).limit(1).execute()
         if hasattr(res_comp, 'data') and len(res_comp.data) > 0:
             return True
             
-        # Check if code exists in tasks table
         res_tasks = supabase.table("tasks").select("hub_code").eq("hub_code", hub_code).limit(1).execute()
         if hasattr(res_tasks, 'data') and len(res_tasks.data) > 0:
             return True
@@ -264,7 +273,6 @@ if st.session_state.current_user:
         </div>
         """, unsafe_allow_html=True)
         
-        # Profile Configuration Expander
         with st.expander("⚙️ Edit Profile / Settings"):
             st.info(f"🔑 **Your Shared Hub Code:** `{st.session_state.hub_code}`")
             st.caption("This matches the Hub Code entered at the login window.")
@@ -276,7 +284,6 @@ if st.session_state.current_user:
                 st.success("Profile photo updated!")
                 st.rerun()
                 
-            # Theme switcher
             current_mode = st.session_state.theme_mode
             theme_toggle = st.toggle("Dark Mode Active", value=(current_mode == "Dark"), key="theme_toggle_widget")
             expected_mode = "Dark" if theme_toggle else "Light"
@@ -287,7 +294,7 @@ if st.session_state.current_user:
 
 # Interface Tabs Definitions
 def login_tab():
-    st.subheader("Login / Registration")
+    st.subheader("Hub Selection / Profile Creation")
     
     if not st.session_state.current_user:
         col_first, col_last = st.columns(2)
@@ -302,20 +309,17 @@ def login_tab():
         st.write("---")
         st.markdown("#### Enter Hub Code or Create Hub")
         
-        # Enter Hub Code input box on TOP
         join_hub_code = st.text_input("Enter Hub Code", key="join_hub_input").strip().upper()
         
-        # Side-by-side action buttons at the BOTTOM
         col_btn1, col_btn2 = st.columns(2)
         
         with col_btn1:
-            if st.button("Log In", key="login_btn"):
+            if st.button("Log In to Hub", key="login_btn"):
                 if not first_name.strip() or not last_name.strip():
                     st.error("Please enter both your first and last name.")
                 elif not join_hub_code:
                     st.error("Please type a Hub Code to log into.")
                 else:
-                    # Validate if the hub code exists in the database tables
                     if not verify_hub_exists(join_hub_code):
                         st.error("Hub code entered does not exist")
                     else:
@@ -331,10 +335,9 @@ def login_tab():
                         st.rerun()
                         
         with col_btn2:
-            if st.button("✨ Create Hub", key="create_hub_btn"):
+            if st.button("✨ Create New Hub", key="create_hub_btn"):
                 new_code = generate_hub_code()
                 try:
-                    # Fix: Insert an initialization record so verify_hub_exists() detects it instantly
                     supabase.table("tasks").insert({
                         "task_name": "Hub Initialized",
                         "task_date": datetime.utcnow().date().isoformat(),
@@ -345,11 +348,13 @@ def login_tab():
                     st.error(f"Error saving new Hub to database: {e}")
     else:
         st.info(f"Logged in as: **{st.session_state.current_user}** (Hub: `{st.session_state.hub_code}`)")
-        if st.button("Log Out", key="action_logout_btn"):
+        st.caption(f"Linked Subscription Email: {auth_email}")
+        if st.button("Log Out / Change Email", key="action_logout_btn"):
             mark_inactive(st.session_state.current_user, st.session_state.hub_code)
             st.session_state.current_user = None
             st.session_state.profile_pic = None
             st.session_state.hub_code = None
+            st.session_state.verified_email = None
             st.success("Logged out successfully.")
             st.rerun()
 
@@ -372,7 +377,7 @@ def log_workout_tab():
     with btn_col1:
         if st.button("Log Workout", key="normal_log_workout_btn"):
             if not name.strip():
-                st.error("Please log in first.")
+                st.error("Please setup your profile layout first.")
             else:
                 log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=False)
                 mark_active(name.strip(), st.session_state.hub_code)
@@ -380,7 +385,7 @@ def log_workout_tab():
     with btn_col2:
         if st.button("Finish Workout", key="finish_workout_action_btn"):
             if not name.strip():
-                st.error("Please log in first.")
+                st.error("Please setup your profile layout first.")
             else:
                 log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=True)
                 mark_active(name.strip(), st.session_state.hub_code)
@@ -457,17 +462,16 @@ def finished_workouts_tab():
         
         st.write(f"🏆 **{person}** finalized workout: **{exercise}** — {sets} sets x {reps} reps @ {weight} lbs ({duration} mins)")
 
-# Router logic for the unlocked app
-st.title("RunItBack 🏃‍♂️")
-st.caption(f"Authenticated Account: {auth_email}")
+# Router logic for the unlocked app layout
+st.caption(f"Verified Member Access: {auth_email}")
 
 if st.session_state.current_user is None:
-    tab1, = st.tabs(["Login"])
+    tab1, = st.tabs(["Hub Hub Registration"])
     with tab1:
         login_tab()
-        st.warning("Please log in or create a Hub to unlock features.")
+        st.warning("Please join or create a workout Hub to unlock tracking options.")
 else:
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Login Status", "Log Workout", "Dashboard", "Active Users", "Finished Workouts"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Hub Options", "Log Workout", "Dashboard", "Active Users", "Finished Workouts"])
     with tab1:
         login_tab()
     with tab2:
