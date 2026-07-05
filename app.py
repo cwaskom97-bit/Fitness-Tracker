@@ -274,7 +274,7 @@ def login_tab():
         with col_btn2:
             if st.button("✨ Create Hub", key="create_hub_btn"):
                 new_code = generate_hub_code()
-                st.success(f"🎉 Hub Created! Use Code: **{new_code}** to log in above.")
+                st.success(f"🎉 Hub created: **{new_code}**")
     else:
         st.info(f"Logged in as: **{st.session_state.current_user}** (Hub: `{st.session_state.hub_code}`)")
         if st.button("Log Out", key="action_logout_btn"):
