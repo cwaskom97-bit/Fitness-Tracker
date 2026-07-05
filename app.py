@@ -4,9 +4,68 @@ from datetime import datetime, timedelta
 import base64
 import random
 import string
+import stripe
 
-# 1. Page Configuration (Browser Tab Title and Icon)
+# ==========================================
+# 1. Page Configuration & Stripe Init
+# ==========================================
 st.set_page_config(page_title="RunItBack", page_icon="🏃‍♂️", layout="centered")
+
+# Initialize Stripe key from secrets
+stripe.api_key = st.secrets["stripe_api_key_test"]
+checkout_url = st.secrets["stripe_link_test"]
+
+# ==========================================
+# 2. MANDATORY AUTHENTICATION & STRIPE GATE
+# ==========================================
+# Force login using Streamlit's built-in OAuth service
+if not st.experimental_user.is_logged_in:
+    st.title("RunItBack 🏃‍♂️")
+    st.subheader("Welcome to Premium Fitness Tracking")
+    st.write("Please log in with your Streamlit account to check your subscription status.")
+    if st.button("Log In / Register Account"):
+        st.login()
+    st.stop()  # Stop completely until logged in
+
+# Retrieve the authenticated user's email
+auth_email = st.experimental_user.email
+
+# Function to check Stripe API for an active customer subscription
+def has_active_subscription(email):
+    try:
+        # Search Stripe for a customer with this email
+        customers = stripe.Customer.list(email=email, limit=1)
+        if not customers.data:
+            return False
+        
+        customer_id = customers.data[0].id
+        # Look for active subscriptions for this customer
+        subscriptions = stripe.Subscription.list(customer=customer_id, status="active", limit=1)
+        return len(subscriptions.data) > 0
+    except Exception as e:
+        st.error(f"Error checking subscription status: {e}")
+        return False
+
+# Evaluate if user has paid
+if not has_active_subscription(auth_email):
+    st.title("🔒 Subscription Required")
+    st.warning(f"The account ({auth_email}) does not have an active premium membership.")
+    st.write("To unlock full access to RunItBack, please complete your subscription below:")
+    
+    # Render customized Stripe payment link button
+    st.markdown(
+        f'<a href="{checkout_url}" target="_blank">'
+        '<button style="background-color:#635BFF;color:white;padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:16px;width:100%;font-weight:bold;">'
+        '💳 Subscribe Now via Stripe'
+        '</button></a>', 
+        unsafe_allow_html=True
+    )
+    st.info("💡 Once payment is finalized, return here and refresh the page to unlock your dashboard.")
+    st.stop()  # Lock down the app features until subscription passes
+
+# ==========================================
+# 3. PREMIUM APP LOADED (User Verified)
+# ==========================================
 
 # Initialize Theme States Early - Defaulting directly to Dark Mode
 if "theme_mode" not in st.session_state:
@@ -103,7 +162,7 @@ def generate_hub_code():
 # Default generic placeholder avatar icon
 DEFAULT_AVATAR = "https://www.w3schools.com/howto/img_avatar.png"
 
-# 2. Database Initialization
+# Database Initialization
 @st.cache_resource
 def get_client() -> Client:
     url = st.secrets["SUPABASE_URL"]
@@ -112,7 +171,7 @@ def get_client() -> Client:
 
 supabase = get_client()
 
-# 3. Session State Tracker
+# Session State Tracker
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
 if "profile_pic" not in st.session_state:
@@ -120,7 +179,7 @@ if "profile_pic" not in st.session_state:
 
 TIMEOUT_MINUTES = 10
 
-# 4. Database Interactions
+# Database Interactions
 def verify_hub_exists(hub_code):
     try:
         # Check if code exists in Completions table
@@ -226,7 +285,7 @@ if st.session_state.current_user:
                 st.rerun()
         st.write("---")
 
-# 5. Interface Tabs
+# Interface Tabs Definitions
 def login_tab():
     st.subheader("Login / Registration")
     
@@ -398,8 +457,9 @@ def finished_workouts_tab():
         
         st.write(f"🏆 **{person}** finalized workout: **{exercise}** — {sets} sets x {reps} reps @ {weight} lbs ({duration} mins)")
 
-# 6. Main App Layout Router (Auth Guarded)
+# Router logic for the unlocked app
 st.title("RunItBack 🏃‍♂️")
+st.caption(f"Authenticated Account: {auth_email}")
 
 if st.session_state.current_user is None:
     tab1, = st.tabs(["Login"])
