@@ -19,7 +19,7 @@ checkout_url = st.secrets["stripe_link_test"]
 # 2. MANDATORY AUTHENTICATION & STRIPE GATE
 # ==========================================
 # Force login using Streamlit's built-in OAuth service
-if not st.experimental_user.is_logged_in:
+if not st.user.is_logged_in:
     st.title("RunItBack 🏃‍♂️")
     st.subheader("Welcome to Premium Fitness Tracking")
     st.write("Please log in with your Streamlit account to check your subscription status.")
@@ -28,7 +28,7 @@ if not st.experimental_user.is_logged_in:
     st.stop()  # Stop completely until logged in
 
 # Retrieve the authenticated user's email
-auth_email = st.experimental_user.email
+auth_email = st.user.email
 
 # Function to check Stripe API for an active customer subscription
 def has_active_subscription(email):
