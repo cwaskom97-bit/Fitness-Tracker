@@ -100,6 +100,9 @@ def file_to_base64(uploaded_file):
 def generate_hub_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
+# Default generic placeholder avatar icon
+DEFAULT_AVATAR = "https://www.w3schools.com/howto/img_avatar.png"
+
 # 2. Database Initialization
 @st.cache_resource
 def get_client() -> Client:
@@ -108,9 +111,6 @@ def get_client() -> Client:
     return create_client(url, key)
 
 supabase = get_client()
-
-# Default generic placeholder avatar icon
-DEFAULT_AVATAR = "https://www.w3schools.com/howto/img_avatar.png"
 
 # 3. Session State Tracker
 if "current_user" not in st.session_state:
@@ -243,10 +243,10 @@ def login_tab():
         st.write("---")
         st.markdown("#### Enter Hub Code or Create Hub")
         
-        # 1. Enter Hub Code on TOP
+        # 1. Hub Code input box on TOP
         join_hub_code = st.text_input("Enter Hub Code", key="join_hub_input").strip().upper()
         
-        # 2. Buttons arranged side by side at the BOTTOM
+        # 2. Side-by-side action buttons at the BOTTOM
         col_btn1, col_btn2 = st.columns(2)
         
         with col_btn1:
@@ -256,7 +256,7 @@ def login_tab():
                 elif not join_hub_code:
                     st.error("Please type a Hub Code to log into.")
                 else:
-                    # Validate if the hub code exists in the database
+                    # Check if hub code exists in database before proceeding
                     if not verify_hub_exists(join_hub_code):
                         st.error("❌ No code exists for this hub")
                     else:
@@ -392,4 +392,20 @@ def finished_workouts_tab():
 # 6. Main App Layout Router (Auth Guarded)
 st.title("RunItBack 🏃‍♂️")
 
-if st.session_state.current_
+if st.session_state.current_user is None:
+    tab1, = st.tabs(["Login"])
+    with tab1:
+        login_tab()
+        st.warning("Please log in or create a Hub to unlock features.")
+else:
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Login Status", "Log Workout", "Dashboard", "Active Users", "Finished Workouts"])
+    with tab1:
+        login_tab()
+    with tab2:
+        log_workout_tab()
+    with tab3:
+        dashboard_tab()
+    with tab4:
+        active_users_tab()
+    with tab5:
+        finished_workouts_tab()
