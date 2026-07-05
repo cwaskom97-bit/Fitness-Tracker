@@ -100,9 +100,6 @@ def file_to_base64(uploaded_file):
 def generate_hub_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
-# Default generic placeholder avatar icon
-DEFAULT_AVATAR = "https://www.w3schools.com/howto/img_avatar.png"
-
 # 2. Database Initialization
 @st.cache_resource
 def get_client() -> Client:
@@ -112,6 +109,9 @@ def get_client() -> Client:
 
 supabase = get_client()
 
+# Default generic placeholder avatar icon
+DEFAULT_AVATAR = "https://www.w3schools.com/howto/img_avatar.png"
+
 # 3. Session State Tracker
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
@@ -120,7 +120,23 @@ if "profile_pic" not in st.session_state:
 
 TIMEOUT_MINUTES = 10
 
-# 4. Database Interactions (Filtered using hub_code)
+# 4. Database Interactions
+def verify_hub_exists(hub_code):
+    try:
+        # Check if code exists in Completions table
+        res_comp = supabase.table("Completions").select("hub_code").eq("hub_code", hub_code).limit(1).execute()
+        if hasattr(res_comp, 'data') and len(res_comp.data) > 0:
+            return True
+            
+        # Check if code exists in tasks table
+        res_tasks = supabase.table("tasks").select("hub_code").eq("hub_code", hub_code).limit(1).execute()
+        if hasattr(res_tasks, 'data') and len(res_tasks.data) > 0:
+            return True
+            
+        return False
+    except Exception as e:
+        return False
+
 def mark_active(name, hub_code):
     try:
         supabase.table("tasks").upsert({
@@ -225,37 +241,40 @@ def login_tab():
         st.caption("(Optional)")
         
         st.write("---")
-        st.markdown("#### Hub Settings")
+        st.markdown("#### Enter Hub Code or Create Hub")
         
-        # Text input where whatever the user inputs becomes their profile hub code
+        # 1. Enter Hub Code on TOP
         join_hub_code = st.text_input("Enter Hub Code", key="join_hub_input").strip().upper()
         
+        # 2. Buttons arranged side by side at the BOTTOM
         col_btn1, col_btn2 = st.columns(2)
         
         with col_btn1:
-            if st.button("✨ Create Hub", key="create_hub_btn"):
-                # Simply generates a code, alerts the user, and does NOT log them in.
-                new_code = generate_hub_code()
-                st.success(f"🎉 Hub Created! Use Code: **{new_code}** to log in below.")
-                    
-        with col_btn2:
             if st.button("Log In", key="login_btn"):
                 if not first_name.strip() or not last_name.strip():
                     st.error("Please enter both your first and last name.")
                 elif not join_hub_code:
                     st.error("Please type a Hub Code to log into.")
                 else:
-                    # Captures the text input directly as the profile's active hub code
-                    st.session_state.hub_code = join_hub_code
-                    full_name = f"{first_name.strip().title()} {last_name.strip().title()}"
-                    st.session_state.current_user = full_name
-                    
-                    if uploaded_file is not None:
-                        st.session_state.profile_pic = file_to_base64(uploaded_file)
-                    
-                    mark_active(full_name, join_hub_code)
-                    st.success(f"Logged into Hub {join_hub_code} successfully!")
-                    st.rerun()
+                    # Validate if the hub code exists in the database
+                    if not verify_hub_exists(join_hub_code):
+                        st.error("❌ No code exists for this hub")
+                    else:
+                        st.session_state.hub_code = join_hub_code
+                        full_name = f"{first_name.strip().title()} {last_name.strip().title()}"
+                        st.session_state.current_user = full_name
+                        
+                        if uploaded_file is not None:
+                            st.session_state.profile_pic = file_to_base64(uploaded_file)
+                        
+                        mark_active(full_name, join_hub_code)
+                        st.success(f"Logged into Hub {join_hub_code} successfully!")
+                        st.rerun()
+                        
+        with col_btn2:
+            if st.button("✨ Create Hub", key="create_hub_btn"):
+                new_code = generate_hub_code()
+                st.success(f"🎉 Hub Created! Use Code: **{new_code}** to log in above.")
     else:
         st.info(f"Logged in as: **{st.session_state.current_user}** (Hub: `{st.session_state.hub_code}`)")
         if st.button("Log Out", key="action_logout_btn"):
@@ -373,20 +392,4 @@ def finished_workouts_tab():
 # 6. Main App Layout Router (Auth Guarded)
 st.title("RunItBack 🏃‍♂️")
 
-if st.session_state.current_user is None:
-    tab1, = st.tabs(["Login"])
-    with tab1:
-        login_tab()
-        st.warning("Please log in or create a Hub to unlock features.")
-else:
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Login Status", "Log Workout", "Dashboard", "Active Users", "Finished Workouts"])
-    with tab1:
-        login_tab()
-    with tab2:
-        log_workout_tab()
-    with tab3:
-        dashboard_tab()
-    with tab4:
-        active_users_tab()
-    with tab5:
-        finished_workouts_tab()
+if st.session_state.current_
