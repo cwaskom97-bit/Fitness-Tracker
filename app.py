@@ -251,10 +251,10 @@ def login_tab():
         st.write("---")
         st.markdown("#### Enter Hub Code or Create Hub")
         
-        # Added requested guidance message directly above inputs/buttons
-        st.info("💡 Create hub then enter code below")
-        
         join_hub_code = st.text_input("Enter Hub Code", key="join_hub_input").strip().upper()
+        
+        # Updated text and placed below the input box but above the action buttons
+        st.info("💡 Create hub then enter code above")
         
         col_btn1, col_btn2 = st.columns(2)
         
@@ -305,7 +305,6 @@ def log_workout_tab():
     st.subheader("Log a Workout")
     name = st.text_input("Account:", value=st.session_state.current_user or "", key="workout_entry_name", disabled=True)
     
-    # Camera Stream added here to track user during workout sessions
     st.write("---")
     st.markdown("### 🎥 Live Workout Camera Tracker")
     workout_video_frame = st.camera_input("Track Workout Form & Session", key="workout_tracker_camera")
