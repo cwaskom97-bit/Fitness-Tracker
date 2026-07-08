@@ -116,28 +116,18 @@ TIMEOUT_MINUTES = 10
 # ==========================================
 # 3. DATABASE & STORAGE INTERACTIONS
 # ==========================================
-def upload_video_to_supabase(file_payload, unique_name):
-    """Uploads video file binary to Supabase storage bucket and returns public link"""
+def upload_video_bytes_to_supabase(file_bytes, unique_name):
+    """Uploads video byte array directly to Supabase storage bucket and returns public link"""
     try:
         bucket_name = "workout-videos"
-        # Rewind file buffer position to read clean data safely
-        file_payload.seek(0)
-        file_bytes = file_payload.read()
-        
-        # Determine clean content type based on extension
-        file_ext = os.path.splitext(unique_name)[1].lower()
         mime_type = "video/mp4"
-        if "mov" in file_ext: mime_type = "video/quicktime"
-        elif "avi" in file_ext: mime_type = "video/x-msvideo"
 
-        # Execute bucket upload binary tracking payload
         res = supabase.storage.from_(bucket_name).upload(
             path=unique_name,
             file=file_bytes,
             file_options={"content-type": mime_type, "x-upsert": "true"}
         )
         
-        # Retrieve final public accessibility asset routing URL 
         public_url_res = supabase.storage.from_(bucket_name).get_public_url(unique_name)
         return public_url_res
     except Exception as e:
@@ -309,25 +299,96 @@ def log_workout_tab():
     name = st.text_input("Account:", value=st.session_state.current_user or "", key="workout_entry_name", disabled=True)
     
     st.write("---")
-    st.markdown("### 🎥 Live Workout Camera & Video Tracker")
+    st.markdown("### 🎥 Live Video Recorder & Camera Snapshot")
     
-    workout_video_frame = st.camera_input("Take Live Form Snapshot", key="workout_tracker_camera")
-    if workout_video_frame:
-        st.caption("✅ Snapshot captured successfully.")
-        
-    workout_video_file = st.file_uploader("Record / Upload Workout Video", type=["mp4", "mov", "avi", "m4v"], key="workout_tracker_video")
+    # Selection component to swap between taking picture vs native video tracking
+    media_mode = st.radio("Choose tracking tool:", ["Live Video Camcorder", "Photo Snapshot / File Upload"], horizontal=True)
+    
     uploaded_video_url = None
     
-    if workout_video_file:
-        st.caption("✅ Video recording recognized.")
-        # Process immediate file payload upload to Cloud Bucket Storage
-        with st.spinner("Uploading video to cloud tracking file..."):
-            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-            clean_filename = f"{st.session_state.hub_code}_{timestamp_str}_{workout_video_file.name.replace(' ', '_')}"
-            uploaded_video_url = upload_video_to_supabase(workout_video_file, clean_filename)
-            if uploaded_video_url:
-                st.success("Video linked successfully and ready for database entry!")
-                
+    if media_mode == "Live Video Camcorder":
+        st.caption("Press 'Start Recording' to film your form via your webcam. Press 'Stop' when done to review.")
+        
+        # Inject standard HTML5 MediaRecorder script 
+        # Encodes binary payload back into Streamlit query strings or inputs dynamically
+        ctx_recorder_html = """
+        <div style="text-align: center; margin-top: 10px;">
+            <video id="webcamPreview" autoplay muted playsinline style="width: 100%; max-width: 400px; border-radius: 10px; background: #000;"></video>
+            <br><br>
+            <button id="startRecBtn" style="padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">🔴 Start Recording</button>
+            <button id="stopRecBtn" style="padding: 10px 20px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;" disabled>⏹️ Stop</button>
+            <br><br>
+            <video id="playbackView" controls style="width: 100%; max-width: 400px; display: none; border-radius: 10px; margin-top: 10px;"></video>
+        </div>
+
+        <script>
+            let stream, mediaRecorder, chunks = [];
+            const videoPreview = document.getElementById('webcamPreview');
+            const playbackView = document.getElementById('playbackView');
+            const startBtn = document.getElementById('startRecBtn');
+            const stopBtn = document.getElementById('stopRecBtn');
+
+            // Initialize Webcam Feed immediately
+            async function initWebcam() {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    videoPreview.srcObject = stream;
+                } catch(e) { console.error("Webcam access denied", e); }
+            }
+            initWebcam();
+
+            startBtn.onclick = () => {
+                chunks = [];
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                mediaRecorder.ondataavailable = (e) => { if(e.data.size > 0) chunks.push(e.data); };
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(chunks, { type: 'video/mp4' });
+                    
+                    // Display preview clip locally
+                    playbackView.src = URL.createObjectURL(blob);
+                    playbackView.style.display = 'inline-block';
+                    
+                    // Convert file to base64 structure to pass to Streamlit hidden widget elements
+                    let reader = new FileReader();
+                    reader.readAsDataURL(blob); 
+                    reader.onloadend = function() {
+                        let base64Data = reader.result.split(',')[1];
+                        parent.postMessage({type: 'streamlit:setComponentValue', value: base64Data}, '*');
+                    }
+                };
+                mediaRecorder.start();
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            };
+
+            stopBtn.onclick = () => {
+                mediaRecorder.stop();
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            };
+        </script>
+        """
+        
+        # Render the custom recording interface
+        import streamlit.components.v1 as components
+        recorded_base64 = components.html(ctx_recorder_html, height=480, scrolling=False)
+        
+        # Fallback file system uploader so users can also provide preset clips directly
+        workout_video_file = st.file_uploader("Alternative: Upload recorded video file link instead", type=["mp4", "mov", "avi"], key="manual_upload_backup")
+        
+        if workout_video_file:
+            with st.spinner("Uploading custom file payload..."):
+                timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                clean_filename = f"{st.session_state.hub_code}_{timestamp_str}_{workout_video_file.name.replace(' ', '_')}"
+                uploaded_video_url = upload_video_bytes_to_supabase(workout_video_file.read(), clean_filename)
+                if uploaded_video_url:
+                    st.success("Uploaded clip processed successfully!")
+
+    else:
+        workout_video_frame = st.camera_input("Take Live Form Snapshot", key="workout_tracker_camera")
+        if workout_video_frame:
+            st.caption("✅ Snapshot captured successfully.")
+            
     st.write("---")
     exercise = st.text_input("Exercise:", key="workout_entry_exercise")
     
@@ -439,7 +500,6 @@ def recorded_workouts_tab():
         st.info("No recordings logged in this hub yet.")
         return
         
-    # Filter entries that contain valid uploaded cloud URLs
     video_entries = [w for w in workouts if w.get("video_url")]
     
     if not video_entries:
