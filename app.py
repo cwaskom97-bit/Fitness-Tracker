@@ -8,6 +8,7 @@ import os
 # NEW IMPORT FOR GEMINI AI AGENT
 from google import genai
 from google.genai import types
+import streamlit.components.v1 as components
 
 # ==========================================
 # 1. Page Configuration
@@ -15,6 +16,48 @@ from google.genai import types
 st.set_page_config(page_title="RunItBack", page_icon="🏃‍♂️", layout="centered")
 
 st.title("RunItBack 🏃‍♂️")
+
+# ==========================================
+# PERSISTENT LOCAL STORAGE HELPER (FOR PASSWORD)
+# ==========================================
+# This component allows saving and retrieving a password directly from the browser's persistent storage
+def get_local_password():
+    if "browser_password" not in st.session_state:
+        st.session_state.browser_password = None
+    
+    # Simple JS snippet to read from browser local storage and set a query param
+    query_params = st.query_params
+    if "saved_pwd" in query_params:
+        st.session_state.browser_password = query_params["saved_pwd"]
+    else:
+        components.html(
+            """
+            <script>
+                const pwd = localStorage.getItem('runitback_password');
+                if (pwd) {
+                    const url = new URL(window.parent.location.href);
+                    url.searchParams.set('saved_pwd', pwd);
+                    window.parent.location.href = url.href;
+                }
+            </script>
+            """,
+            height=0,
+        )
+
+def save_local_password(password):
+    st.session_state.browser_password = password
+    st.query_params["saved_pwd"] = password
+    components.html(
+        f"""
+        <script>
+            localStorage.setItem('runitback_password', '{password}');
+        </script>
+        """,
+        height=0,
+    )
+
+# Run the local storage check at startup
+get_local_password()
 
 # ==========================================
 # 2. APP THEME & INITIALIZATION
@@ -268,6 +311,17 @@ def login_tab():
         uploaded_file = st.file_uploader("Upload Profile Picture", type=["png", "jpg", "jpeg"], key="user_profile_pic")
         st.caption("(Optional)")
         st.write("---")
+        
+        st.markdown("#### Security Setup")
+        # Check if browser already has a saved password
+        has_saved_password = st.session_state.browser_password is not None
+        
+        if not has_saved_password:
+            password_input = st.text_input("Create a Device Password", type="password", key="create_pwd_input", help="This will lock this browser session to you.")
+        else:
+            password_input = st.text_input("Enter Your Device Password", type="password", key="verify_pwd_input")
+            
+        st.write("---")
         st.markdown("#### Enter Hub Code or Create Hub")
         join_hub_code = st.text_input("Enter Hub Code", key="join_hub_input").strip().upper()
         st.info("💡 Create hub then enter code above")
@@ -277,12 +331,18 @@ def login_tab():
             if st.button("Log In to Hub", key="login_btn"):
                 if not first_name.strip() or not last_name.strip():
                     st.error("Please enter both your first and last name.")
+                elif not password_input:
+                    st.error("Please provide a password.")
+                elif has_saved_password and password_input != st.session_state.browser_password:
+                    st.error("Incorrect password for this browser profile.")
                 elif not join_hub_code:
                     st.error("Please type a Hub Code to log into.")
                 else:
                     if not verify_hub_exists(join_hub_code):
                         st.error("Hub code entered does not exist")
                     else:
+                        if not has_saved_password:
+                            save_local_password(password_input)
                         st.session_state.hub_code = join_hub_code
                         full_name = f"{first_name.strip().title()} {last_name.strip().title()}"
                         st.session_state.current_user = full_name
