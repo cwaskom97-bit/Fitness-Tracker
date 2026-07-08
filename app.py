@@ -26,6 +26,8 @@ def get_local_profile():
         st.session_state.browser_password = None
     if "saved_profile" not in st.session_state:
         st.session_state.saved_profile = None
+    if "profile_checked" not in st.session_state:
+        st.session_state.profile_checked = False
     
     query_params = st.query_params
     
@@ -33,18 +35,17 @@ def get_local_profile():
     if "saved_pwd" in query_params and "saved_user_data" in query_params:
         st.session_state.browser_password = query_params["saved_pwd"]
         try:
-            # Safely parse and store the profile globally in session state
             st.session_state.saved_profile = json.loads(query_params["saved_user_data"])
         except:
             st.session_state.saved_profile = None
             
-        # 2. Clear the query params from the URL bar immediately 
-        # so they aren't remembered if the user closes/reopens the tab!
+        st.session_state.profile_checked = True
+        # Clear the query params from the URL bar immediately
         st.query_params.clear()
         st.rerun()
 
-    # If we don't have a verified password session yet, query localStorage via JavaScript
-    if not st.session_state.browser_password and not st.session_state.saved_profile:
+    # If the URL is clean and we haven't checked localStorage yet, do it now
+    if not st.session_state.profile_checked:
         components.html(
             """
             <script>
@@ -55,11 +56,24 @@ def get_local_profile():
                     url.searchParams.set('saved_pwd', pwd);
                     url.searchParams.set('saved_user_data', profile);
                     window.parent.location.href = url.href;
+                } else {
+                    // Tell Streamlit that storage is empty so it can stop waiting
+                    const url = new URL(window.parent.location.href);
+                    url.searchParams.set('storage_empty', 'true');
+                    window.parent.location.href = url.href;
                 }
             </script>
             """,
             height=0,
         )
+        
+        # Catch the empty storage signal to prevent infinite loops
+        if "storage_empty" in query_params:
+            st.session_state.profile_checked = True
+            st.query_params.clear()
+            st.rerun()
+            
+        st.stop() # Freeze Python here until JavaScript redirects the page
 
 def save_local_profile(password, first_name, last_name, hub_code, profile_pic=None):
     st.session_state.browser_password = password
@@ -333,7 +347,7 @@ def login_tab():
         has_saved_profile = st.session_state.saved_profile is not None
         
         # ----------------------------------------------------
-        # BRANCH A: REMEMBER ME ACTIVE (Asks for password)
+        # BRANCH A: REMEMBER ME ACTIVE
         # ----------------------------------------------------
         if has_saved_profile:
             saved = st.session_state.saved_profile
@@ -359,6 +373,7 @@ def login_tab():
                 )
                 st.session_state.saved_profile = None
                 st.session_state.browser_password = None
+                st.session_state.profile_checked = False
                 st.rerun()
                 
             if st.button("Log In", key="login_btn_remembered"):
