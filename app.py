@@ -9,6 +9,7 @@ import json
 # NEW IMPORT FOR GEMINI AI AGENT
 from google import genai
 from google.genai import types
+import streamlit.components.v1 as components
 
 # ==========================================
 # 1. Page Configuration
@@ -28,49 +29,42 @@ def get_local_profile():
     if "profile_checked" not in st.session_state:
         st.session_state.profile_checked = False
     
-    query_params = st.query_params
-    
-    # 1. Read the data from query params if present
-    if "saved_pwd" in query_params and "saved_user_data" in query_params:
-        st.session_state.browser_password = query_params["saved_pwd"]
-        try:
-            st.session_state.saved_profile = json.loads(query_params["saved_user_data"])
-        except:
-            st.session_state.saved_profile = None
-            
-        st.session_state.profile_checked = True
-        # Clear the query params from the URL bar immediately
-        st.query_params.clear()
-        st.rerun()
+    # If already checked or found in this session, don't rerun JavaScript
+    if st.session_state.profile_checked:
+        return
 
-    # If the URL is clean and we haven't checked localStorage yet, do it now
-    if not st.session_state.profile_checked:
-        html_code = """
+    # Use a safe fallback mechanism to communicate storage back to Streamlit
+    storage_data = components.html(
+        """
         <script>
             const pwd = localStorage.getItem('runitback_password');
             const profile = localStorage.getItem('runitback_profile');
             if (pwd && profile) {
-                const url = new URL(window.parent.location.href);
-                url.searchParams.set('saved_pwd', pwd);
-                url.searchParams.set('saved_user_data', profile);
-                window.parent.location.href = url.href;
+                window.parent.postMessage({
+                    type: 'streamlit:setComponentValue',
+                    value: { pwd: pwd, profile: profile }
+                }, '*');
             } else {
-                const url = new URL(window.parent.location.href);
-                url.searchParams.set('storage_empty', 'true');
-                window.parent.location.href = url.href;
+                window.parent.postMessage({
+                    type: 'streamlit:setComponentValue',
+                    value: { empty: true }
+                }, '*');
             }
         </script>
-        """
-        # Swapped to a raw HTML components layout standard injection data uri string for st.html / frame stability
-        st.html(f"<iframe srcdoc='{html_code}' style='display:none; width:0; height:0; border:none;'></iframe>")
-        
-        # Catch the empty storage signal to prevent infinite loops
-        if "storage_empty" in query_params:
-            st.session_state.profile_checked = True
-            st.query_params.clear()
-            st.rerun()
-            
-        st.stop() 
+        """,
+        height=0,
+    )
+
+    # Process the data when received from the browser
+    if storage_data:
+        if isinstance(storage_data, dict) and "pwd" in storage_data:
+            st.session_state.browser_password = storage_data["pwd"]
+            try:
+                st.session_state.saved_profile = json.loads(storage_data["profile"])
+            except:
+                st.session_state.saved_profile = None
+        st.session_state.profile_checked = True
+        st.rerun()
 
 def save_local_profile(password, first_name, last_name, hub_code, profile_pic=None):
     st.session_state.browser_password = password
@@ -84,15 +78,17 @@ def save_local_profile(password, first_name, last_name, hub_code, profile_pic=No
     st.session_state.saved_profile = profile_data
     profile_json = json.dumps(profile_data)
     
-    html_code = f"""
-    <script>
-        localStorage.setItem('runitback_password', '{password}');
-        localStorage.setItem('runitback_profile', `{profile_json}`);
-    </script>
-    """
-    st.html(f"<iframe srcdoc='{html_code}' style='display:none; width:0; height:0; border:none;'></iframe>")
+    components.html(
+        f"""
+        <script>
+            localStorage.setItem('runitback_password', '{password}');
+            localStorage.setItem('runitback_profile', `{profile_json}`);
+        </script>
+        """,
+        height=0,
+    )
 
-# Run the local storage check at startup
+# Run the local storage check at startup (Non-blocking)
 get_local_profile()
 
 # ==========================================
@@ -354,17 +350,14 @@ def login_tab():
             password_input = st.text_input("Enter Your Password to Unlock Profile", type="password", key="verify_pwd_input")
             
             if st.button("← Use a different account / Clear memory", key="clear_saved_local_btn"):
-                html_code = """
-                <script>
-                    localStorage.removeItem('runitback_password');
-                    localStorage.removeItem('runitback_profile');
-                    const url = new URL(window.parent.location.href);
-                    url.searchParams.delete('saved_pwd');
-                    url.searchParams.delete('saved_user_data');
-                    window.parent.location.href = url.href;
-                </script>
-                """
-                st.html(f"<iframe srcdoc='{html_code}' style='display:none; width:0; height:0; border:none;'></iframe>")
+                components.html(
+                    """
+                    <script>
+                        localStorage.removeItem('runitback_password');
+                        localStorage.removeItem('runitback_profile');
+                    </script>
+                    """, height=0
+                )
                 st.session_state.saved_profile = None
                 st.session_state.browser_password = None
                 st.session_state.profile_checked = False
@@ -603,7 +596,7 @@ def recorded_workouts_tab():
             st.write("---")
 
 # ==========================================
-# NEW FEATURE: GEMINI AI COACH TAB
+# GEMINI AI COACH TAB
 # ==========================================
 def ai_coach_tab():
     st.subheader("🤖 RunItBack AI Personal Coach")
