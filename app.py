@@ -6,10 +6,8 @@ import random
 import string
 import os
 import json
-# NEW IMPORT FOR GEMINI AI AGENT
 from google import genai
 from google.genai import types
-import streamlit.components.v1 as components
 
 # ==========================================
 # 1. Page Configuration
@@ -18,92 +16,21 @@ st.set_page_config(page_title="RunItBack", page_icon="🏃‍♂️", layout="ce
 
 st.title("RunItBack 🏃‍♂️")
 
-# ==========================================
-# PERSISTENT LOCAL STORAGE HELPER (FOR PROFILE & PASSWORD)
-# ==========================================
-def get_local_profile():
-    if "browser_password" not in st.session_state:
-        st.session_state.browser_password = None
-    if "saved_profile" not in st.session_state:
-        st.session_state.saved_profile = None
-    if "profile_checked" not in st.session_state:
-        st.session_state.profile_checked = False
-    
-    # If already checked or found in this session, don't rerun JavaScript
-    if st.session_state.profile_checked:
-        return
-
-    # Use a safe fallback mechanism to communicate storage back to Streamlit
-    storage_data = components.html(
-        """
-        <script>
-            const pwd = localStorage.getItem('runitback_password');
-            const profile = localStorage.getItem('runitback_profile');
-            if (pwd && profile) {
-                window.parent.postMessage({
-                    type: 'streamlit:setComponentValue',
-                    value: { pwd: pwd, profile: profile }
-                }, '*');
-            } else {
-                window.parent.postMessage({
-                    type: 'streamlit:setComponentValue',
-                    value: { empty: true }
-                }, '*');
-            }
-        </script>
-        """,
-        height=0,
-    )
-
-    # Process the data when received from the browser
-    if storage_data:
-        if isinstance(storage_data, dict) and "pwd" in storage_data:
-            st.session_state.browser_password = storage_data["pwd"]
-            try:
-                st.session_state.saved_profile = json.loads(storage_data["profile"])
-            except:
-                st.session_state.saved_profile = None
-        st.session_state.profile_checked = True
-        st.rerun()
-
-def save_local_profile(password, first_name, last_name, hub_code, profile_pic=None):
-    st.session_state.browser_password = password
-    
-    profile_data = {
-        "first_name": first_name,
-        "last_name": last_name,
-        "hub_code": hub_code,
-        "profile_pic": profile_pic
-    }
-    st.session_state.saved_profile = profile_data
-    profile_json = json.dumps(profile_data)
-    
-    components.html(
-        f"""
-        <script>
-            localStorage.setItem('runitback_password', '{password}');
-            localStorage.setItem('runitback_profile', `{profile_json}`);
-        </script>
-        """,
-        height=0,
-    )
-
-# Run the local storage check at startup (Non-blocking)
-get_local_profile()
-
-# ==========================================
-# 2. APP THEME & INITIALIZATION
-# ==========================================
-
-if "theme_mode" not in st.session_state:
-    st.session_state.theme_mode = "Dark"
+# Initialize Session States safely
+if "current_user" not in st.session_state:
+    st.session_state.current_user = None
+if "profile_pic" not in st.session_state:
+    st.session_state.profile_pic = None
 if "hub_code" not in st.session_state:
     st.session_state.hub_code = None
-
-# Initialize Chat History for Gemini Agent
+if "theme_mode" not in st.session_state:
+    st.session_state.theme_mode = "Dark"
 if "ai_chat_history" not in st.session_state:
     st.session_state.ai_chat_history = []
 
+# ==========================================
+# 2. APP THEME CONFIGURATION
+# ==========================================
 if st.session_state.theme_mode == "Dark":
     st._config.set_option("theme.base", "dark")
     st._config.set_option("theme.backgroundColor", "#0E1117")
@@ -169,6 +96,7 @@ div.stButton > button[key*="inline_del_"] {
 </style>
 """, unsafe_allow_html=True)
 
+# Helper functions
 def file_to_base64(uploaded_file):
     if uploaded_file is not None:
         file_bytes = uploaded_file.read()
@@ -179,6 +107,7 @@ def generate_hub_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 DEFAULT_AVATAR = "https://www.w3schools.com/howto/img_avatar.png"
+TIMEOUT_MINUTES = 10
 
 @st.cache_resource
 def get_client() -> Client:
@@ -186,7 +115,6 @@ def get_client() -> Client:
     key = st.secrets["SUPABASE_KEY"]
     return create_client(url, key)
 
-# Caching the Gemini AI Client initialization
 @st.cache_resource
 def get_gemini_client():
     if "GOOGLE_API_KEY" in st.secrets:
@@ -196,15 +124,8 @@ def get_gemini_client():
 supabase = get_client()
 ai_client = get_gemini_client()
 
-if "current_user" not in st.session_state:
-    st.session_state.current_user = None
-if "profile_pic" not in st.session_state:
-    st.session_state.profile_pic = None
-
-TIMEOUT_MINUTES = 10
-
 # ==========================================
-# 3. DATABASE & STORAGE INTERACTIONS
+# 3. DATABASE INTERACTIONS
 # ==========================================
 def upload_video_to_supabase(file_payload, unique_name):
     try:
@@ -311,7 +232,6 @@ if st.session_state.current_user:
         
         with st.expander("⚙️ Edit Profile / Settings"):
             st.info(f"🔑 **Your Shared Hub Code:** `{st.session_state.hub_code}`")
-            st.caption("This matches the Hub Code entered at the login window.")
             st.write("---")
             
             new_pic = st.file_uploader("Update Profile Picture", type=["png", "jpg", "jpeg"], key="update_avatar_input")
@@ -332,53 +252,47 @@ if st.session_state.current_user:
 # 4. INTERFACE TABS DEFINITIONS
 # ==========================================
 def login_tab():
-    st.subheader("Hub Selection / Profile Creation")
+    st.subheader("Hub Selection & Profile Entry")
     
     if not st.session_state.current_user:
-        has_saved_profile = st.session_state.saved_profile is not None
+        login_mode = st.radio("Choose Action", ["Sign In / Load Existing Profile", "Register New User Profile"], horizontal=True)
         
         # ----------------------------------------------------
-        # BRANCH A: REMEMBER ME ACTIVE
+        # MODE 1: SECURE SIGN IN (Backend Verified)
         # ----------------------------------------------------
-        if has_saved_profile:
-            saved = st.session_state.saved_profile
-            full_name = f"{saved['first_name']} {saved['last_name']}"
+        if login_mode == "Sign In / Load Existing Profile":
+            st.markdown("### Welcome Back! 👋")
+            input_name = st.text_input("Enter your Full Name (First Last)", placeholder="e.g. John Doe").strip()
+            input_pwd = st.text_input("Enter your Device Password", type="password")
+            target_hub = st.text_input("Enter Target Hub Code").strip().upper()
             
-            st.markdown(f"### Welcome back, **{full_name}**! 👋")
-            st.info(f"Target Hub: `{saved['hub_code']}`")
-            
-            password_input = st.text_input("Enter Your Password to Unlock Profile", type="password", key="verify_pwd_input")
-            
-            if st.button("← Use a different account / Clear memory", key="clear_saved_local_btn"):
-                components.html(
-                    """
-                    <script>
-                        localStorage.removeItem('runitback_password');
-                        localStorage.removeItem('runitback_profile');
-                    </script>
-                    """, height=0
-                )
-                st.session_state.saved_profile = None
-                st.session_state.browser_password = None
-                st.session_state.profile_checked = False
-                st.rerun()
-                
-            if st.button("Log In", key="login_btn_remembered"):
-                if password_input != st.session_state.browser_password:
-                    st.error("Incorrect password.")
+            if st.button("Access Hub Account"):
+                if not input_name or not input_pwd or not target_hub:
+                    st.error("Please fill in all search credentials.")
+                elif not verify_hub_exists(target_hub):
+                    st.error("The specified Hub Code does not exist.")
                 else:
-                    if not verify_hub_exists(saved['hub_code']):
-                        st.error("Your saved Hub code no longer exists.")
-                    else:
-                        st.session_state.hub_code = saved['hub_code']
-                        st.session_state.current_user = full_name
-                        st.session_state.profile_pic = saved.get('profile_pic')
-                        mark_active(full_name, saved['hub_code'])
-                        st.success("Welcome back!")
-                        st.rerun()
+                    # Look up your last workout to pull profile configuration safely
+                    try:
+                        res = supabase.table("Completions").select("*").eq("name", input_name).eq("hub_code", target_hub).limit(1).execute()
+                        if hasattr(res, 'data') and len(res.data) > 0:
+                            st.session_state.hub_code = target_hub
+                            st.session_state.current_user = input_name
+                            mark_active(input_name, target_hub)
+                            st.success(f"Profile found! Welcome back to Hub {target_hub}.")
+                            st.rerun()
+                        else:
+                            # Fallback if no logs exist yet, but hub is real
+                            st.session_state.hub_code = target_hub
+                            st.session_state.current_user = input_name
+                            mark_active(input_name, target_hub)
+                            st.success(f"Welcome to Hub {target_hub}.")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Account lookup error: {e}")
 
         # ----------------------------------------------------
-        # BRANCH B: REGULAR REGISTRATION / LOGIN
+        # MODE 2: REGISTRATION
         # ----------------------------------------------------
         else:
             col_first, col_last = st.columns(2)
@@ -388,42 +302,35 @@ def login_tab():
                 last_name = st.text_input("Last Name", key="user_last_name")
                 
             uploaded_file = st.file_uploader("Upload Profile Picture", type=["png", "jpg", "jpeg"], key="user_profile_pic")
-            st.caption("(Optional)")
-            st.write("---")
             
             st.markdown("#### Security Setup")
-            password_input = st.text_input("Create a Device Password", type="password", key="create_pwd_input", help="This will lock this browser session to you.")
+            password_input = st.text_input("Create a Device Password", type="password", key="create_pwd_input")
                 
-            st.write("---")
             st.markdown("#### Enter Hub Code or Create Hub")
             join_hub_code = st.text_input("Enter Hub Code", key="join_hub_input").strip().upper()
-            st.info("💡 Create hub then enter code above")
             
             col_btn1, col_btn2 = st.columns(2)
             with col_btn1:
-                if st.button("Log In to Hub", key="login_btn"):
+                if st.button("Register & Log In"):
                     if not first_name.strip() or not last_name.strip():
                         st.error("Please enter both your first and last name.")
                     elif not password_input:
-                        st.error("Please provide a password.")
+                        st.error("Please provide a security password.")
                     elif not join_hub_code:
-                        st.error("Please type a Hub Code to log into.")
+                        st.error("Please enter a Hub Code.")
+                    elif not verify_hub_exists(join_hub_code):
+                        st.error("Hub code entered does not exist.")
                     else:
-                        if not verify_hub_exists(join_hub_code):
-                            st.error("Hub code entered does not exist")
-                        else:
-                            pic_b64 = file_to_base64(uploaded_file) if uploaded_file else None
-                            
-                            save_local_profile(password_input, first_name.strip().title(), last_name.strip().title(), join_hub_code, pic_b64)
-                            
-                            st.session_state.hub_code = join_hub_code
-                            full_name = f"{first_name.strip().title()} {last_name.strip().title()}"
-                            st.session_state.current_user = full_name
-                            st.session_state.profile_pic = pic_b64
-                            
-                            mark_active(full_name, join_hub_code)
-                            st.success(f"Logged into Hub {join_hub_code} successfully!")
-                            st.rerun()
+                        pic_b64 = file_to_base64(uploaded_file) if uploaded_file else None
+                        full_name = f"{first_name.strip().title()} {last_name.strip().title()}"
+                        
+                        st.session_state.hub_code = join_hub_code
+                        st.session_state.current_user = full_name
+                        st.session_state.profile_pic = pic_b64
+                        
+                        mark_active(full_name, join_hub_code)
+                        st.success(f"Registered successfully into Hub {join_hub_code}!")
+                        st.rerun()
                             
             with col_btn2:
                 if st.button("✨ Create New Hub", key="create_hub_btn"):
@@ -436,7 +343,7 @@ def login_tab():
                         }).execute()
                         st.success(f"🎉 Hub created: **{new_code}**")
                     except Exception as e:
-                        st.error(f"Error saving new Hub to database: {e}")
+                        st.error(f"Error saving new Hub: {e}")
     else:
         st.info(f"Logged in as: **{st.session_state.current_user}** (Hub: `{st.session_state.hub_code}`)")
         if st.button("Log Out", key="action_logout_btn"):
@@ -456,20 +363,16 @@ def log_workout_tab():
     st.markdown("### 🎥 Live Workout Camera & Video Tracker")
     
     workout_video_frame = st.camera_input("Take Live Form Snapshot", key="workout_tracker_camera")
-    if workout_video_frame:
-        st.caption("✅ Snapshot captured successfully.")
-        
     workout_video_file = st.file_uploader("Record / Upload Workout Video", type=["mp4", "mov", "avi", "m4v"], key="workout_tracker_video")
     uploaded_video_url = None
     
     if workout_video_file:
-        st.caption("✅ Video recording recognized.")
         with st.spinner("Uploading video to cloud tracking file..."):
             timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
             clean_filename = f"{st.session_state.hub_code}_{timestamp_str}_{workout_video_file.name.replace(' ', '_')}"
             uploaded_video_url = upload_video_to_supabase(workout_video_file, clean_filename)
             if uploaded_video_url:
-                st.success("Video linked successfully and ready for database entry!")
+                st.success("Video linked successfully!")
                 
     st.write("---")
     exercise = st.text_input("Exercise:", key="workout_entry_exercise")
@@ -486,9 +389,9 @@ def log_workout_tab():
 
     btn_col1, btn_col2 = st.columns(2)
     with btn_col1:
-        if st.button("Log Workout", key="normal_log_workout_btn"):
+        if st.button("Log Workout"):
             if not name.strip():
-                st.error("Please setup your profile layout first.")
+                st.error("Please login to your profile first.")
             else:
                 log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=False, video_url=uploaded_video_url)
                 mark_active(name.strip(), st.session_state.hub_code)
@@ -496,14 +399,14 @@ def log_workout_tab():
     with btn_col2:
         if st.button("Finish Workout", key="finish_workout_action_btn"):
             if not name.strip():
-                st.error("Please setup your profile layout first.")
+                st.error("Please login to your profile first.")
             else:
                 log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=True, video_url=uploaded_video_url)
                 mark_active(name.strip(), st.session_state.hub_code)
 
 def dashboard_tab():
     st.subheader(f"Hub Dashboard — Hub: {st.session_state.hub_code}")
-    if st.button("Refresh Dashboard", key="dashboard_manual_refresh_btn"):
+    if st.button("Refresh Dashboard"):
         st.rerun()
 
     workouts = get_all_workouts(st.session_state.hub_code)
@@ -534,7 +437,7 @@ def dashboard_tab():
 
 def active_users_tab():
     st.subheader("Who's Active in this Hub")
-    if st.button("Refresh Active List", key="active_users_manual_refresh_btn"):
+    if st.button("Refresh Active List"):
         st.rerun()
 
     active = get_active_users(st.session_state.hub_code)
@@ -548,7 +451,7 @@ def active_users_tab():
 
 def finished_workouts_tab():
     st.subheader("Finished Workouts")
-    if st.button("Refresh Workouts", key="finished_workouts_refresh_btn"):
+    if st.button("Refresh Workouts"):
         st.rerun()
 
     workouts = get_all_workouts(st.session_state.hub_code)
@@ -572,9 +475,7 @@ def finished_workouts_tab():
 
 def recorded_workouts_tab():
     st.subheader("📼 Recorded Workouts Hub Feed")
-    st.caption("Review cloud video clips and workout performance records uploaded by hub members.")
-    
-    if st.button("Refresh Videos Feed", key="videos_feed_refresh_btn"):
+    if st.button("Refresh Videos Feed"):
         st.rerun()
 
     workouts = get_all_workouts(st.session_state.hub_code)
@@ -583,7 +484,6 @@ def recorded_workouts_tab():
         return
         
     video_entries = [w for w in workouts if w.get("video_url")]
-    
     if not video_entries:
         st.info("No logged entries have an attached video recording file yet.")
         return
@@ -595,18 +495,14 @@ def recorded_workouts_tab():
             st.video(entry.get("video_url"))
             st.write("---")
 
-# ==========================================
-# GEMINI AI COACH TAB
-# ==========================================
 def ai_coach_tab():
     st.subheader("🤖 RunItBack AI Personal Coach")
-    st.caption("Ask your dedicated Gemini Coach for routine tips, fitness advice, or recovery strategies.")
     
     if not ai_client:
-        st.error("Gemini AI API Key not found. Please verify your Streamlit Secrets Configuration.")
+        st.error("Gemini AI API Key not found. Please verify your Streamlit Secrets.")
         return
 
-    if st.button("Reset Chat Thread", key="clear_coach_chat_btn"):
+    if st.button("Reset Chat Thread"):
         st.session_state.ai_chat_history = []
         st.rerun()
 
@@ -625,8 +521,7 @@ def ai_coach_tab():
             
             system_instruction = (
                 f"You are a professional personal fitness coach agent for the app 'RunItBack'. "
-                f"You are currently speaking to {st.session_state.current_user}. Provide elite level workout, "
-                f"dietary, structural, and recovery guidance. Be brief, energetic, motivating, and professional."
+                f"You are currently speaking to {st.session_state.current_user}. Provide elite level workout guidance."
             )
             
             try:
@@ -660,25 +555,16 @@ def ai_coach_tab():
 # 5. APP ROUTER NAVIGATION LOGIC
 # ==========================================
 if st.session_state.current_user is None:
-    tab1, = st.tabs(["Hub Registration"])
+    tab1, = st.tabs(["Hub Registration & Entry"])
     with tab1:
         login_tab()
-        st.warning("Please join or create a workout Hub to unlock tracking options.")
+        st.warning("Please sign in or register to unlock tracking tabs.")
 else:
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        "Hub Options", "Log Workout", "Dashboard", "Active Users", "Finished Workouts", "Recorded Workouts", "AI Coach 🤖"
-    ])
-    with tab1:
-        login_tab()
-    with tab2:
-        log_workout_tab()
-    with tab3:
-        dashboard_tab()
-    with tab4:
-        active_users_tab()
-    with tab5:
-        finished_workouts_tab()
-    with tab6:
-        recorded_workouts_tab()
-    with tab7:
-        ai_coach_tab()
+    tabs = st.tabs(["Hub Options", "Log Workout", "Dashboard", "Active Users", "Finished Workouts", "Recorded Workouts", "AI Coach 🤖"])
+    with tabs[0]: login_tab()
+    with tabs[1]: log_workout_tab()
+    with tabs[2]: dashboard_tab()
+    with tabs[3]: active_users_tab()
+    with tabs[4]: finished_workouts_tab()
+    with tabs[5]: recorded_workouts_tab()
+    with tabs[6]: ai_coach_tab()
