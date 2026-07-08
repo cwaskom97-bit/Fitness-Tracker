@@ -5,6 +5,9 @@ import base64
 import random
 import string
 import os
+# NEW IMPORT FOR GEMINI AI AGENT
+from google import genai
+from google.genai import types
 
 # ==========================================
 # 1. Page Configuration
@@ -21,6 +24,10 @@ if "theme_mode" not in st.session_state:
     st.session_state.theme_mode = "Dark"
 if "hub_code" not in st.session_state:
     st.session_state.hub_code = None
+
+# Initialize Chat History for Gemini Agent
+if "ai_chat_history" not in st.session_state:
+    st.session_state.ai_chat_history = []
 
 if st.session_state.theme_mode == "Dark":
     st._config.set_option("theme.base", "dark")
@@ -104,7 +111,15 @@ def get_client() -> Client:
     key = st.secrets["SUPABASE_KEY"]
     return create_client(url, key)
 
+# Caching the Gemini AI Client initialization
+@st.cache_resource
+def get_gemini_client():
+    if "GOOGLE_API_KEY" in st.secrets:
+        return genai.Client(api_key=st.secrets["GOOGLE_API_KEY"])
+    return None
+
 supabase = get_client()
+ai_client = get_gemini_client()
 
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
@@ -117,27 +132,22 @@ TIMEOUT_MINUTES = 10
 # 3. DATABASE & STORAGE INTERACTIONS
 # ==========================================
 def upload_video_to_supabase(file_payload, unique_name):
-    """Uploads video file binary to Supabase storage bucket and returns public link"""
     try:
         bucket_name = "workout-videos"
-        # Rewind file buffer position to read clean data safely
         file_payload.seek(0)
         file_bytes = file_payload.read()
         
-        # Determine clean content type based on extension
         file_ext = os.path.splitext(unique_name)[1].lower()
         mime_type = "video/mp4"
         if "mov" in file_ext: mime_type = "video/quicktime"
         elif "avi" in file_ext: mime_type = "video/x-msvideo"
 
-        # Execute bucket upload binary tracking payload
         res = supabase.storage.from_(bucket_name).upload(
             path=unique_name,
             file=file_bytes,
             file_options={"content-type": mime_type, "x-upsert": "true"}
         )
         
-        # Retrieve final public accessibility asset routing URL 
         public_url_res = supabase.storage.from_(bucket_name).get_public_url(unique_name)
         return public_url_res
     except Exception as e:
@@ -301,6 +311,7 @@ def login_tab():
             st.session_state.current_user = None
             st.session_state.profile_pic = None
             st.session_state.hub_code = None
+            st.session_state.ai_chat_history = [] # Reset coach history on logout
             st.success("Logged out successfully.")
             st.rerun()
 
@@ -320,7 +331,6 @@ def log_workout_tab():
     
     if workout_video_file:
         st.caption("✅ Video recording recognized.")
-        # Process immediate file payload upload to Cloud Bucket Storage
         with st.spinner("Uploading video to cloud tracking file..."):
             timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
             clean_filename = f"{st.session_state.hub_code}_{timestamp_str}_{workout_video_file.name.replace(' ', '_')}"
@@ -439,7 +449,6 @@ def recorded_workouts_tab():
         st.info("No recordings logged in this hub yet.")
         return
         
-    # Filter entries that contain valid uploaded cloud URLs
     video_entries = [w for w in workouts if w.get("video_url")]
     
     if not video_entries:
@@ -454,6 +463,75 @@ def recorded_workouts_tab():
             st.write("---")
 
 # ==========================================
+# NEW FEATURE: GEMINI AI COACH TAB
+# ==========================================
+def ai_coach_tab():
+    st.subheader("🤖 RunItBack AI Personal Coach")
+    st.caption("Ask your dedicated Gemini Coach for routine tips, fitness advice, or recovery strategies.")
+    
+    if not ai_client:
+        st.error("Gemini AI API Key not found. Please verify your Streamlit Secrets Configuration.")
+        return
+
+    # Option to clear chat thread
+    if st.button("Reset Chat Thread", key="clear_coach_chat_btn"):
+        st.session_state.ai_chat_history = []
+        st.rerun()
+
+    # Create a nice scrolling space for existing thread messages
+    for msg in st.session_state.ai_chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Wait for user input
+    if user_prompt := st.chat_input("Ask your AI Coach anything..."):
+        # Display user statement
+        with st.chat_message("user"):
+            st.markdown(user_prompt)
+        st.session_state.ai_chat_history.append({"role": "user", "content": user_prompt})
+
+        # Query Gemini API using streaming logic for immediate performance feel
+        with st.chat_message("assistant"):
+            response_placeholder = st.empty()
+            full_response = ""
+            
+            # Setup System Instructions contextually wrapping user states dynamically
+            system_instruction = (
+                f"You are a professional personal fitness coach agent for the app 'RunItBack'. "
+                f"You are currently speaking to {st.session_state.current_user}. Provide elite level workout, "
+                f"dietary, structural, and recovery guidance. Be brief, energetic, motivating, and professional."
+            )
+            
+            try:
+                # Setup structured historic payload format required by official GenAI SDK
+                formatted_contents = []
+                for past_msg in st.session_state.ai_chat_history:
+                    role_map = "user" if past_msg["role"] == "user" else "model"
+                    formatted_contents.append(
+                        types.Content(role=role_map, parts=[types.Part.from_text(text=past_msg["content"])])
+                    )
+                
+                # Stream the response natively
+                response_stream = ai_client.models.generate_content_stream(
+                    model='gemini-2.5-flash',
+                    contents=formatted_contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        temperature=0.6,
+                    )
+                )
+                
+                for chunk in response_stream:
+                    full_response += chunk.text
+                    response_placeholder.markdown(full_response + "▌")
+                
+                response_placeholder.markdown(full_response)
+                st.session_state.ai_chat_history.append({"role": "assistant", "content": full_response})
+                
+            except Exception as e:
+                st.error(f"Gemini API Error: {str(e)}")
+
+# ==========================================
 # 5. APP ROUTER NAVIGATION LOGIC
 # ==========================================
 if st.session_state.current_user is None:
@@ -462,7 +540,10 @@ if st.session_state.current_user is None:
         login_tab()
         st.warning("Please join or create a workout Hub to unlock tracking options.")
 else:
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Hub Options", "Log Workout", "Dashboard", "Active Users", "Finished Workouts", "Recorded Workouts"])
+    # ADDED "AI Coach 🤖" TO THE MAIN TAB DISPLAY LIST
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "Hub Options", "Log Workout", "Dashboard", "Active Users", "Finished Workouts", "Recorded Workouts", "AI Coach 🤖"
+    ])
     with tab1:
         login_tab()
     with tab2:
@@ -475,3 +556,5 @@ else:
         finished_workouts_tab()
     with tab6:
         recorded_workouts_tab()
+    with tab7:
+        ai_coach_tab() # Connect view to router logic
