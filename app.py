@@ -50,7 +50,6 @@ div.stButton > button[key*="finish_workout_action_btn"] {
     color: white !important;
     border: none !important;
     font-weight: bold !important;
-    margin-top: 10px;
 }
 div.stButton > button[key*="finish_workout_action_btn"]:hover {
     background-color: #218838 !important;
@@ -117,18 +116,28 @@ TIMEOUT_MINUTES = 10
 # ==========================================
 # 3. DATABASE & STORAGE INTERACTIONS
 # ==========================================
-def upload_video_bytes_to_supabase(file_bytes, unique_name):
-    """Uploads video byte array directly to Supabase storage bucket and returns public link"""
+def upload_video_to_supabase(file_payload, unique_name):
+    """Uploads video file binary to Supabase storage bucket and returns public link"""
     try:
         bucket_name = "workout-videos"
+        # Rewind file buffer position to read clean data safely
+        file_payload.seek(0)
+        file_bytes = file_payload.read()
+        
+        # Determine clean content type based on extension
+        file_ext = os.path.splitext(unique_name)[1].lower()
         mime_type = "video/mp4"
+        if "mov" in file_ext: mime_type = "video/quicktime"
+        elif "avi" in file_ext: mime_type = "video/x-msvideo"
 
+        # Execute bucket upload binary tracking payload
         res = supabase.storage.from_(bucket_name).upload(
             path=unique_name,
             file=file_bytes,
             file_options={"content-type": mime_type, "x-upsert": "true"}
         )
         
+        # Retrieve final public accessibility asset routing URL 
         public_url_res = supabase.storage.from_(bucket_name).get_public_url(unique_name)
         return public_url_res
     except Exception as e:
@@ -300,86 +309,24 @@ def log_workout_tab():
     name = st.text_input("Account:", value=st.session_state.current_user or "", key="workout_entry_name", disabled=True)
     
     st.write("---")
-    st.markdown("### 🎥 Native Video Recorder")
-    st.caption("1. Click 'Start' to record via webcam. 2. Click 'Stop' to auto-save to your device. 3. Drag the file below to log it.")
+    st.markdown("### 🎥 Live Workout Camera & Video Tracker")
     
-    # Secure, isolated HTML5 Recorder that auto-downloads recorded footage directly to device safely
-    recorder_html = """
-    <div style="text-align: center; font-family: sans-serif; background: #1e1e24; padding: 15px; border-radius: 12px; border: 1px solid #333;">
-        <video id="camPreview" autoplay muted playsinline style="width: 100%; max-width: 380px; border-radius: 8px; background: #000;"></video>
-        <div style="margin-top: 15px;">
-            <button id="startBtn" style="padding: 10px 18px; background-color: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-right: 8px;">🔴 Start Recording</button>
-            <button id="stopBtn" style="padding: 10px 18px; background-color: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;" disabled>⏹️ Stop & Save</button>
-        </div>
-        <p id="statusMsg" style="color: #aaa; font-size: 0.9em; margin-top: 10px;">Camera feed active</p>
-    </div>
-
-    <script>
-        let stream, recorder, chunks = [];
-        const preview = document.getElementById('camPreview');
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const statusMsg = document.getElementById('statusMsg');
-
-        async function startCam() {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                preview.srcObject = stream;
-            } catch(err) {
-                statusMsg.innerText = "Error: Camera permissions denied.";
-                statusMsg.style.color = "#ff4b4b";
-            }
-        }
-        startCam();
-
-        startBtn.onclick = () => {
-            chunks = [];
-            recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
-            recorder.ondataavailable = e => { if(e.data.size > 0) chunks.push(e.data); };
-            recorder.onstop = () => {
-                const blob = new Blob(chunks, { type: 'video/mp4' });
-                const url = URL.createObjectURL(blob);
-                
-                // Fallback auto-download trigger
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `workout_log_${Date.now()}.mp4`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                
-                statusMsg.innerText = "✅ Saved to your downloads folder! Upload it below.";
-                statusMsg.style.color = "#28a745";
-            };
-            recorder.start();
-            statusMsg.innerText = "Recording form clip live...";
-            statusMsg.style.color = "#ff4b4b";
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
-        };
-
-        stopBtn.onclick = () => {
-            recorder.stop();
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-        };
-    </script>
-    """
-    
-    import streamlit.components.v1 as components
-    components.html(recorder_html, height=360, scrolling=False)
-    
-    # Central target dropzone to connect files to your database
+    workout_video_frame = st.camera_input("Take Live Form Snapshot", key="workout_tracker_camera")
+    if workout_video_frame:
+        st.caption("✅ Snapshot captured successfully.")
+        
+    workout_video_file = st.file_uploader("Record / Upload Workout Video", type=["mp4", "mov", "avi", "m4v"], key="workout_tracker_video")
     uploaded_video_url = None
-    workout_video_file = st.file_uploader("📂 Drop your recorded video or workout clip file here", type=["mp4", "mov", "avi", "webm"], key="cloud_uploader_widget")
     
     if workout_video_file:
-        with st.spinner("Uploading file to cloud tracking systems..."):
+        st.caption("✅ Video recording recognized.")
+        # Process immediate file payload upload to Cloud Bucket Storage
+        with st.spinner("Uploading video to cloud tracking file..."):
             timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
             clean_filename = f"{st.session_state.hub_code}_{timestamp_str}_{workout_video_file.name.replace(' ', '_')}"
-            uploaded_video_url = upload_video_bytes_to_supabase(workout_video_file.read(), clean_filename)
+            uploaded_video_url = upload_video_to_supabase(workout_video_file, clean_filename)
             if uploaded_video_url:
-                st.success("File synchronized with cloud architecture successfully!")
+                st.success("Video linked successfully and ready for database entry!")
                 
     st.write("---")
     exercise = st.text_input("Exercise:", key="workout_entry_exercise")
@@ -481,7 +428,7 @@ def finished_workouts_tab():
         st.write(f"🏆 **{person}** finalized workout: **{exercise}** — {sets} sets x {reps} reps @ {weight} lbs ({duration} mins)")
 
 def recorded_workouts_tab():
-    st.subheader("Rescordered Workouts Hub Feed")
+    st.subheader("📼 Recorded Workouts Hub Feed")
     st.caption("Review cloud video clips and workout performance records uploaded by hub members.")
     
     if st.button("Refresh Videos Feed", key="videos_feed_refresh_btn"):
@@ -492,6 +439,7 @@ def recorded_workouts_tab():
         st.info("No recordings logged in this hub yet.")
         return
         
+    # Filter entries that contain valid uploaded cloud URLs
     video_entries = [w for w in workouts if w.get("video_url")]
     
     if not video_entries:
