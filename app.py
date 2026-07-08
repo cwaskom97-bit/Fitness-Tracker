@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import base64
 import random
 import string
+import os
 
 # ==========================================
 # 1. Page Configuration
@@ -16,13 +17,11 @@ st.title("RunItBack 🏃‍♂️")
 # 2. APP THEME & INITIALIZATION
 # ==========================================
 
-# Initialize Theme States Early - Defaulting directly to Dark Mode
 if "theme_mode" not in st.session_state:
     st.session_state.theme_mode = "Dark"
 if "hub_code" not in st.session_state:
     st.session_state.hub_code = None
 
-# Inject Runtime Theme configuration values
 if st.session_state.theme_mode == "Dark":
     st._config.set_option("theme.base", "dark")
     st._config.set_option("theme.backgroundColor", "#0E1117")
@@ -34,23 +33,18 @@ else:
     st._config.set_option("theme.secondaryBackgroundColor", "#F0F2F6")
     st._config.set_option("theme.textColor", "#31333F")
 
-# Custom CSS Styling
 st.markdown("""
 <style>
 html, body, [data-testid="stAppViewContainer"] {
     overflow-y: auto !important;
     scroll-behavior: smooth;
 }
-
-/* Default standard button styling */
 div.stButton > button {
     width: 100%;
     height: 3em;
     font-size: 1.05em;
     border-radius: 10px;
 }
-
-/* Distinct styling targeting ONLY the Finish Workout button to make it green */
 div.stButton > button[key*="finish_workout_action_btn"] {
     background-color: #28a745 !important;
     color: white !important;
@@ -61,8 +55,6 @@ div.stButton > button[key*="finish_workout_action_btn"]:hover {
     background-color: #218838 !important;
     color: white !important;
 }
-
-/* Make inline delete buttons look like clean clickable text links */
 div.stButton > button[key*="inline_del_"] {
     background-color: transparent !important;
     border: none !important;
@@ -73,8 +65,6 @@ div.stButton > button[key*="inline_del_"] {
     width: auto !important;
     font-size: 1.1em !important;
 }
-
-/* Unified circular crop layout structure */
 .profile-pic-round {
     width: 60px;
     height: 60px;
@@ -97,21 +87,17 @@ div.stButton > button[key*="inline_del_"] {
 </style>
 """, unsafe_allow_html=True)
 
-# Helper function to convert uploaded file to base64
 def file_to_base64(uploaded_file):
     if uploaded_file is not None:
         file_bytes = uploaded_file.read()
         return base64.b64encode(file_bytes).decode()
     return None
 
-# Helper to generate a random unique Hub Code
 def generate_hub_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
-# Default generic placeholder avatar icon
 DEFAULT_AVATAR = "https://www.w3schools.com/howto/img_avatar.png"
 
-# Database Initialization
 @st.cache_resource
 def get_client() -> Client:
     url = st.secrets["SUPABASE_URL"]
@@ -120,7 +106,6 @@ def get_client() -> Client:
 
 supabase = get_client()
 
-# Session State Tracker
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
 if "profile_pic" not in st.session_state:
@@ -129,18 +114,44 @@ if "profile_pic" not in st.session_state:
 TIMEOUT_MINUTES = 10
 
 # ==========================================
-# 3. DATABASE INTERACTIONS
+# 3. DATABASE & STORAGE INTERACTIONS
 # ==========================================
+def upload_video_to_supabase(file_payload, unique_name):
+    """Uploads video file binary to Supabase storage bucket and returns public link"""
+    try:
+        bucket_name = "workout-videos"
+        # Rewind file buffer position to read clean data safely
+        file_payload.seek(0)
+        file_bytes = file_payload.read()
+        
+        # Determine clean content type based on extension
+        file_ext = os.path.splitext(unique_name)[1].lower()
+        mime_type = "video/mp4"
+        if "mov" in file_ext: mime_type = "video/quicktime"
+        elif "avi" in file_ext: mime_type = "video/x-msvideo"
+
+        # Execute bucket upload binary tracking payload
+        res = supabase.storage.from_(bucket_name).upload(
+            path=unique_name,
+            file=file_bytes,
+            file_options={"content-type": mime_type, "x-upsert": "true"}
+        )
+        
+        # Retrieve final public accessibility asset routing URL 
+        public_url_res = supabase.storage.from_(bucket_name).get_public_url(unique_name)
+        return public_url_res
+    except Exception as e:
+        st.error(f"Cloud Storage Error: {e}")
+        return None
+
 def verify_hub_exists(hub_code):
     try:
         res_comp = supabase.table("Completions").select("hub_code").eq("hub_code", hub_code).limit(1).execute()
         if hasattr(res_comp, 'data') and len(res_comp.data) > 0:
             return True
-            
         res_tasks = supabase.table("tasks").select("hub_code").eq("hub_code", hub_code).limit(1).execute()
         if hasattr(res_tasks, 'data') and len(res_tasks.data) > 0:
             return True
-            
         return False
     except Exception as e:
         return False
@@ -171,12 +182,12 @@ def get_active_users(hub_code):
 
 def get_all_workouts(hub_code):
     try:
-        res = supabase.table("Completions").select("*").eq("hub_code", hub_code).execute()
+        res = supabase.table("Completions").select("*").eq("hub_code", hub_code).order("created_at", descending=True).execute()
         return res.data if hasattr(res, 'data') else []
     except Exception as e:
         return []
 
-def log_workout(name, exercise, sets, reps, weight, duration, rest_time, hub_code, completed=False):
+def log_workout(name, exercise, sets, reps, weight, duration, rest_time, hub_code, completed=False, video_url=None):
     try:
         supabase.table("Completions").insert({
             "name": name, 
@@ -187,9 +198,10 @@ def log_workout(name, exercise, sets, reps, weight, duration, rest_time, hub_cod
             "duration": duration,
             "rest_time": rest_time,
             "completed": completed,
-            "hub_code": hub_code
+            "hub_code": hub_code,
+            "video_url": video_url
         }).execute()
-        st.success("Workout recorded successfully!")
+        st.success("Workout recorded permanently to cloud database!")
     except Exception as e:
         st.error(f"Database Error: {e}")
 
@@ -201,11 +213,10 @@ def delete_workout(workout_id):
     except Exception as e:
         st.error(f"Failed to delete workout: {e}")
 
-# Render User identity elements globally when logged in
+# Render identity elements
 if st.session_state.current_user:
     with st.container():
         img_src = f"data:image/png;base64,{st.session_state.profile_pic}" if st.session_state.profile_pic else DEFAULT_AVATAR
-        
         st.markdown(f"""
         <div class="header-container">
             <img class="profile-pic-round" src="{img_src}">
@@ -237,7 +248,6 @@ if st.session_state.current_user:
 # ==========================================
 def login_tab():
     st.subheader("Hub Selection / Profile Creation")
-    
     if not st.session_state.current_user:
         col_first, col_last = st.columns(2)
         with col_first:
@@ -247,17 +257,12 @@ def login_tab():
             
         uploaded_file = st.file_uploader("Upload Profile Picture", type=["png", "jpg", "jpeg"], key="user_profile_pic")
         st.caption("(Optional)")
-        
         st.write("---")
         st.markdown("#### Enter Hub Code or Create Hub")
-        
         join_hub_code = st.text_input("Enter Hub Code", key="join_hub_input").strip().upper()
-        
-        # Updated text and placed below the input box but above the action buttons
         st.info("💡 Create hub then enter code above")
         
         col_btn1, col_btn2 = st.columns(2)
-        
         with col_btn1:
             if st.button("Log In to Hub", key="login_btn"):
                 if not first_name.strip() or not last_name.strip():
@@ -271,10 +276,8 @@ def login_tab():
                         st.session_state.hub_code = join_hub_code
                         full_name = f"{first_name.strip().title()} {last_name.strip().title()}"
                         st.session_state.current_user = full_name
-                        
                         if uploaded_file is not None:
                             st.session_state.profile_pic = file_to_base64(uploaded_file)
-                        
                         mark_active(full_name, join_hub_code)
                         st.success(f"Logged into Hub {join_hub_code} successfully!")
                         st.rerun()
@@ -306,12 +309,26 @@ def log_workout_tab():
     name = st.text_input("Account:", value=st.session_state.current_user or "", key="workout_entry_name", disabled=True)
     
     st.write("---")
-    st.markdown("### 🎥 Live Workout Camera Tracker")
-    workout_video_frame = st.camera_input("Track Workout Form & Session", key="workout_tracker_camera")
-    if workout_video_frame:
-        st.caption("✅ Camera connected and tracking frame snapshot.")
-    st.write("---")
+    st.markdown("### 🎥 Live Workout Camera & Video Tracker")
     
+    workout_video_frame = st.camera_input("Take Live Form Snapshot", key="workout_tracker_camera")
+    if workout_video_frame:
+        st.caption("✅ Snapshot captured successfully.")
+        
+    workout_video_file = st.file_uploader("Record / Upload Workout Video", type=["mp4", "mov", "avi", "m4v"], key="workout_tracker_video")
+    uploaded_video_url = None
+    
+    if workout_video_file:
+        st.caption("✅ Video recording recognized.")
+        # Process immediate file payload upload to Cloud Bucket Storage
+        with st.spinner("Uploading video to cloud tracking file..."):
+            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            clean_filename = f"{st.session_state.hub_code}_{timestamp_str}_{workout_video_file.name.replace(' ', '_')}"
+            uploaded_video_url = upload_video_to_supabase(workout_video_file, clean_filename)
+            if uploaded_video_url:
+                st.success("Video linked successfully and ready for database entry!")
+                
+    st.write("---")
     exercise = st.text_input("Exercise:", key="workout_entry_exercise")
     
     col1, col2 = st.columns(2)
@@ -330,7 +347,7 @@ def log_workout_tab():
             if not name.strip():
                 st.error("Please setup your profile layout first.")
             else:
-                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=False)
+                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=False, video_url=uploaded_video_url)
                 mark_active(name.strip(), st.session_state.hub_code)
                 
     with btn_col2:
@@ -338,7 +355,7 @@ def log_workout_tab():
             if not name.strip():
                 st.error("Please setup your profile layout first.")
             else:
-                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=True)
+                log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=True, video_url=uploaded_video_url)
                 mark_active(name.strip(), st.session_state.hub_code)
 
 def dashboard_tab():
@@ -361,7 +378,6 @@ def dashboard_tab():
             st.write(f"**Total Sets Tracked:** {total_sets}")
             for entry in entries:
                 log_text = f"{entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)"
-                
                 db_name = str(entry.get("name", "")).strip().lower()
                 session_name = str(st.session_state.current_user or "").strip().lower()
                 
@@ -398,7 +414,6 @@ def finished_workouts_tab():
         return
 
     finished_entries = [w for w in workouts if w.get("completed") is True]
-
     if not finished_entries:
         st.info("No workouts finalized using 'Finish Workout' yet.")
         return
@@ -410,8 +425,33 @@ def finished_workouts_tab():
         reps = entry.get("reps", 0)
         weight = entry.get("weight", 0.0)
         duration = entry.get("duration", 0.0)
-        
         st.write(f"🏆 **{person}** finalized workout: **{exercise}** — {sets} sets x {reps} reps @ {weight} lbs ({duration} mins)")
+
+def recorded_workouts_tab():
+    st.subheader("📼 Recorded Workouts Hub Feed")
+    st.caption("Review cloud video clips and workout performance records uploaded by hub members.")
+    
+    if st.button("Refresh Videos Feed", key="videos_feed_refresh_btn"):
+        st.rerun()
+
+    workouts = get_all_workouts(st.session_state.hub_code)
+    if not workouts:
+        st.info("No recordings logged in this hub yet.")
+        return
+        
+    # Filter entries that contain valid uploaded cloud URLs
+    video_entries = [w for w in workouts if w.get("video_url")]
+    
+    if not video_entries:
+        st.info("No logged entries have an attached video recording file yet.")
+        return
+
+    for entry in video_entries:
+        with st.container():
+            st.markdown(f"#### 🎥 {entry.get('name')} — {entry.get('exercise')}")
+            st.write(f"**Stats:** {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs")
+            st.video(entry.get("video_url"))
+            st.write("---")
 
 # ==========================================
 # 5. APP ROUTER NAVIGATION LOGIC
@@ -422,7 +462,7 @@ if st.session_state.current_user is None:
         login_tab()
         st.warning("Please join or create a workout Hub to unlock tracking options.")
 else:
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Hub Options", "Log Workout", "Dashboard", "Active Users", "Finished Workouts"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Hub Options", "Log Workout", "Dashboard", "Active Users", "Finished Workouts", "Recorded Workouts"])
     with tab1:
         login_tab()
     with tab2:
@@ -433,3 +473,5 @@ else:
         active_users_tab()
     with tab5:
         finished_workouts_tab()
+    with tab6:
+        recorded_workouts_tab()
