@@ -33,6 +33,7 @@ def get_local_profile():
     if "saved_pwd" in query_params and "saved_user_data" in query_params:
         st.session_state.browser_password = query_params["saved_pwd"]
         try:
+            # Safely parse and store the profile globally in session state
             st.session_state.saved_profile = json.loads(query_params["saved_user_data"])
         except:
             st.session_state.saved_profile = None
@@ -42,8 +43,8 @@ def get_local_profile():
         st.query_params.clear()
         st.rerun()
 
-    # If the session state doesn't have it yet, query localStorage via JavaScript
-    if not st.session_state.browser_password:
+    # If we don't have a verified password session yet, query localStorage via JavaScript
+    if not st.session_state.browser_password and not st.session_state.saved_profile:
         components.html(
             """
             <script>
@@ -330,12 +331,11 @@ def login_tab():
     
     if not st.session_state.current_user:
         has_saved_profile = st.session_state.saved_profile is not None
-        has_saved_password = st.session_state.browser_password is not None
         
         # ----------------------------------------------------
-        # BRANCH A: REMEMBER ME ACTIVE
+        # BRANCH A: REMEMBER ME ACTIVE (Asks for password)
         # ----------------------------------------------------
-        if has_saved_profile and has_saved_password:
+        if has_saved_profile:
             saved = st.session_state.saved_profile
             full_name = f"{saved['first_name']} {saved['last_name']}"
             
