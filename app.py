@@ -50,6 +50,7 @@ div.stButton > button[key*="finish_workout_action_btn"] {
     color: white !important;
     border: none !important;
     font-weight: bold !important;
+    margin-top: 10px;
 }
 div.stButton > button[key*="finish_workout_action_btn"]:hover {
     background-color: #218838 !important;
@@ -299,96 +300,87 @@ def log_workout_tab():
     name = st.text_input("Account:", value=st.session_state.current_user or "", key="workout_entry_name", disabled=True)
     
     st.write("---")
-    st.markdown("### 🎥 Live Video Recorder & Camera Snapshot")
+    st.markdown("### 🎥 Native Video Recorder")
+    st.caption("1. Click 'Start' to record via webcam. 2. Click 'Stop' to auto-save to your device. 3. Drag the file below to log it.")
     
-    # Selection component to swap between taking picture vs native video tracking
-    media_mode = st.radio("Choose tracking tool:", ["Live Video Camcorder", "Photo Snapshot / File Upload"], horizontal=True)
-    
-    uploaded_video_url = None
-    
-    if media_mode == "Live Video Camcorder":
-        st.caption("Press 'Start Recording' to film your form via your webcam. Press 'Stop' when done to review.")
-        
-        # Inject standard HTML5 MediaRecorder script 
-        # Encodes binary payload back into Streamlit query strings or inputs dynamically
-        ctx_recorder_html = """
-        <div style="text-align: center; margin-top: 10px;">
-            <video id="webcamPreview" autoplay muted playsinline style="width: 100%; max-width: 400px; border-radius: 10px; background: #000;"></video>
-            <br><br>
-            <button id="startRecBtn" style="padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">🔴 Start Recording</button>
-            <button id="stopRecBtn" style="padding: 10px 20px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;" disabled>⏹️ Stop</button>
-            <br><br>
-            <video id="playbackView" controls style="width: 100%; max-width: 400px; display: none; border-radius: 10px; margin-top: 10px;"></video>
+    # Secure, isolated HTML5 Recorder that auto-downloads recorded footage directly to device safely
+    recorder_html = """
+    <div style="text-align: center; font-family: sans-serif; background: #1e1e24; padding: 15px; border-radius: 12px; border: 1px solid #333;">
+        <video id="camPreview" autoplay muted playsinline style="width: 100%; max-width: 380px; border-radius: 8px; background: #000;"></video>
+        <div style="margin-top: 15px;">
+            <button id="startBtn" style="padding: 10px 18px; background-color: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-right: 8px;">🔴 Start Recording</button>
+            <button id="stopBtn" style="padding: 10px 18px; background-color: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;" disabled>⏹️ Stop & Save</button>
         </div>
+        <p id="statusMsg" style="color: #aaa; font-size: 0.9em; margin-top: 10px;">Camera feed active</p>
+    </div>
 
-        <script>
-            let stream, mediaRecorder, chunks = [];
-            const videoPreview = document.getElementById('webcamPreview');
-            const playbackView = document.getElementById('playbackView');
-            const startBtn = document.getElementById('startRecBtn');
-            const stopBtn = document.getElementById('stopRecBtn');
+    <script>
+        let stream, recorder, chunks = [];
+        const preview = document.getElementById('camPreview');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusMsg = document.getElementById('statusMsg');
 
-            // Initialize Webcam Feed immediately
-            async function initWebcam() {
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                    videoPreview.srcObject = stream;
-                } catch(e) { console.error("Webcam access denied", e); }
+        async function startCam() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                preview.srcObject = stream;
+            } catch(err) {
+                statusMsg.innerText = "Error: Camera permissions denied.";
+                statusMsg.style.color = "#ff4b4b";
             }
-            initWebcam();
+        }
+        startCam();
 
-            startBtn.onclick = () => {
-                chunks = [];
-                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-                mediaRecorder.ondataavailable = (e) => { if(e.data.size > 0) chunks.push(e.data); };
-                mediaRecorder.onstop = async () => {
-                    const blob = new Blob(chunks, { type: 'video/mp4' });
-                    
-                    // Display preview clip locally
-                    playbackView.src = URL.createObjectURL(blob);
-                    playbackView.style.display = 'inline-block';
-                    
-                    // Convert file to base64 structure to pass to Streamlit hidden widget elements
-                    let reader = new FileReader();
-                    reader.readAsDataURL(blob); 
-                    reader.onloadend = function() {
-                        let base64Data = reader.result.split(',')[1];
-                        parent.postMessage({type: 'streamlit:setComponentValue', value: base64Data}, '*');
-                    }
-                };
-                mediaRecorder.start();
-                startBtn.disabled = true;
-                stopBtn.disabled = false;
+        startBtn.onclick = () => {
+            chunks = [];
+            recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+            recorder.ondataavailable = e => { if(e.data.size > 0) chunks.push(e.data); };
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/mp4' });
+                const url = URL.createObjectURL(blob);
+                
+                // Fallback auto-download trigger
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `workout_log_${Date.now()}.mp4`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                statusMsg.innerText = "✅ Saved to your downloads folder! Upload it below.";
+                statusMsg.style.color = "#28a745";
             };
+            recorder.start();
+            statusMsg.innerText = "Recording form clip live...";
+            statusMsg.style.color = "#ff4b4b";
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+        };
 
-            stopBtn.onclick = () => {
-                mediaRecorder.stop();
-                startBtn.disabled = false;
-                stopBtn.disabled = true;
-            };
-        </script>
-        """
-        
-        # Render the custom recording interface
-        import streamlit.components.v1 as components
-        recorded_base64 = components.html(ctx_recorder_html, height=480, scrolling=False)
-        
-        # Fallback file system uploader so users can also provide preset clips directly
-        workout_video_file = st.file_uploader("Alternative: Upload recorded video file link instead", type=["mp4", "mov", "avi"], key="manual_upload_backup")
-        
-        if workout_video_file:
-            with st.spinner("Uploading custom file payload..."):
-                timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-                clean_filename = f"{st.session_state.hub_code}_{timestamp_str}_{workout_video_file.name.replace(' ', '_')}"
-                uploaded_video_url = upload_video_bytes_to_supabase(workout_video_file.read(), clean_filename)
-                if uploaded_video_url:
-                    st.success("Uploaded clip processed successfully!")
-
-    else:
-        workout_video_frame = st.camera_input("Take Live Form Snapshot", key="workout_tracker_camera")
-        if workout_video_frame:
-            st.caption("✅ Snapshot captured successfully.")
-            
+        stopBtn.onclick = () => {
+            recorder.stop();
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+        };
+    </script>
+    """
+    
+    import streamlit.components.v1 as components
+    components.html(recorder_html, height=360, scrolling=False)
+    
+    # Central target dropzone to connect files to your database
+    uploaded_video_url = None
+    workout_video_file = st.file_uploader("📂 Drop your recorded video or workout clip file here", type=["mp4", "mov", "avi", "webm"], key="cloud_uploader_widget")
+    
+    if workout_video_file:
+        with st.spinner("Uploading file to cloud tracking systems..."):
+            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            clean_filename = f"{st.session_state.hub_code}_{timestamp_str}_{workout_video_file.name.replace(' ', '_')}"
+            uploaded_video_url = upload_video_bytes_to_supabase(workout_video_file.read(), clean_filename)
+            if uploaded_video_url:
+                st.success("File synchronized with cloud architecture successfully!")
+                
     st.write("---")
     exercise = st.text_input("Exercise:", key="workout_entry_exercise")
     
@@ -489,7 +481,7 @@ def finished_workouts_tab():
         st.write(f"🏆 **{person}** finalized workout: **{exercise}** — {sets} sets x {reps} reps @ {weight} lbs ({duration} mins)")
 
 def recorded_workouts_tab():
-    st.subheader("📼 Recorded Workouts Hub Feed")
+    st.subheader("Rescordered Workouts Hub Feed")
     st.caption("Review cloud video clips and workout performance records uploaded by hub members.")
     
     if st.button("Refresh Videos Feed", key="videos_feed_refresh_btn"):
