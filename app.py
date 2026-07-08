@@ -29,14 +29,18 @@ def get_local_profile():
     
     query_params = st.query_params
     
-    # Read the data back if JavaScript passed it to query params
-    if "saved_pwd" in query_params:
+    # 1. Read the data from query params if present
+    if "saved_pwd" in query_params and "saved_user_data" in query_params:
         st.session_state.browser_password = query_params["saved_pwd"]
-    if "saved_user_data" in query_params:
         try:
             st.session_state.saved_profile = json.loads(query_params["saved_user_data"])
         except:
             st.session_state.saved_profile = None
+            
+        # 2. Clear the query params from the URL bar immediately 
+        # so they aren't remembered if the user closes/reopens the tab!
+        st.query_params.clear()
+        st.rerun()
 
     # If the session state doesn't have it yet, query localStorage via JavaScript
     if not st.session_state.browser_password:
