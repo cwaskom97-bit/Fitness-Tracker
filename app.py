@@ -9,7 +9,6 @@ import json
 # NEW IMPORT FOR GEMINI AI AGENT
 from google import genai
 from google.genai import types
-import streamlit.components.v1 as components
 
 # ==========================================
 # 1. Page Configuration
@@ -46,26 +45,24 @@ def get_local_profile():
 
     # If the URL is clean and we haven't checked localStorage yet, do it now
     if not st.session_state.profile_checked:
-        components.html(
-            """
-            <script>
-                const pwd = localStorage.getItem('runitback_password');
-                const profile = localStorage.getItem('runitback_profile');
-                if (pwd && profile) {
-                    const url = new URL(window.parent.location.href);
-                    url.searchParams.set('saved_pwd', pwd);
-                    url.searchParams.set('saved_user_data', profile);
-                    window.parent.location.href = url.href;
-                } else {
-                    // Tell Streamlit that storage is empty so it can stop waiting
-                    const url = new URL(window.parent.location.href);
-                    url.searchParams.set('storage_empty', 'true');
-                    window.parent.location.href = url.href;
-                }
-            </script>
-            """,
-            height=0,
-        )
+        html_code = """
+        <script>
+            const pwd = localStorage.getItem('runitback_password');
+            const profile = localStorage.getItem('runitback_profile');
+            if (pwd && profile) {
+                const url = new URL(window.parent.location.href);
+                url.searchParams.set('saved_pwd', pwd);
+                url.searchParams.set('saved_user_data', profile);
+                window.parent.location.href = url.href;
+            } else {
+                const url = new URL(window.parent.location.href);
+                url.searchParams.set('storage_empty', 'true');
+                window.parent.location.href = url.href;
+            }
+        </script>
+        """
+        # Swapped to a raw HTML components layout standard injection data uri string for st.html / frame stability
+        st.html(f"<iframe srcdoc='{html_code}' style='display:none; width:0; height:0; border:none;'></iframe>")
         
         # Catch the empty storage signal to prevent infinite loops
         if "storage_empty" in query_params:
@@ -73,7 +70,7 @@ def get_local_profile():
             st.query_params.clear()
             st.rerun()
             
-        st.stop() # Freeze Python here until JavaScript redirects the page
+        st.stop() 
 
 def save_local_profile(password, first_name, last_name, hub_code, profile_pic=None):
     st.session_state.browser_password = password
@@ -87,15 +84,13 @@ def save_local_profile(password, first_name, last_name, hub_code, profile_pic=No
     st.session_state.saved_profile = profile_data
     profile_json = json.dumps(profile_data)
     
-    components.html(
-        f"""
-        <script>
-            localStorage.setItem('runitback_password', '{password}');
-            localStorage.setItem('runitback_profile', `{profile_json}`);
-        </script>
-        """,
-        height=0,
-    )
+    html_code = f"""
+    <script>
+        localStorage.setItem('runitback_password', '{password}');
+        localStorage.setItem('runitback_profile', `{profile_json}`);
+    </script>
+    """
+    st.html(f"<iframe srcdoc='{html_code}' style='display:none; width:0; height:0; border:none;'></iframe>")
 
 # Run the local storage check at startup
 get_local_profile()
@@ -359,18 +354,17 @@ def login_tab():
             password_input = st.text_input("Enter Your Password to Unlock Profile", type="password", key="verify_pwd_input")
             
             if st.button("← Use a different account / Clear memory", key="clear_saved_local_btn"):
-                components.html(
-                    """
-                    <script>
-                        localStorage.removeItem('runitback_password');
-                        localStorage.removeItem('runitback_profile');
-                        const url = new URL(window.parent.location.href);
-                        url.searchParams.delete('saved_pwd');
-                        url.searchParams.delete('saved_user_data');
-                        window.parent.location.href = url.href;
-                    </script>
-                    """, height=0
-                )
+                html_code = """
+                <script>
+                    localStorage.removeItem('runitback_password');
+                    localStorage.removeItem('runitback_profile');
+                    const url = new URL(window.parent.location.href);
+                    url.searchParams.delete('saved_pwd');
+                    url.searchParams.delete('saved_user_data');
+                    window.parent.location.href = url.href;
+                </script>
+                """
+                st.html(f"<iframe srcdoc='{html_code}' style='display:none; width:0; height:0; border:none;'></iframe>")
                 st.session_state.saved_profile = None
                 st.session_state.browser_password = None
                 st.session_state.profile_checked = False
