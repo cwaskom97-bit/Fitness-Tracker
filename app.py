@@ -1,6 +1,6 @@
 import streamlit as st
 from supabase import create_client, Client
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import base64
 import random
 import string
@@ -166,11 +166,11 @@ def mark_active(name, hub_code):
     try:
         supabase.table("tasks").upsert({
             "task_name": name, 
-            "task_date": datetime.utcnow().date().isoformat(),
+            "task_date": datetime.now(timezone.utc).date().isoformat(),
             "hub_code": hub_code
         }).execute()
     except Exception as e:
-        pass
+        st.error(f"Activity Sync Error: {e}")
 
 def mark_inactive(name, hub_code):
     try:
@@ -180,17 +180,19 @@ def mark_inactive(name, hub_code):
 
 def get_active_users(hub_code):
     try:
-        cutoff = (datetime.utcnow() - timedelta(minutes=TIMEOUT_MINUTES)).date().isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=TIMEOUT_MINUTES)).date().isoformat()
         res = supabase.table("tasks").select("*").gte("task_date", cutoff).eq("hub_code", hub_code).execute()
         return res.data if hasattr(res, 'data') else []
     except Exception as e:
+        st.error(f"Error fetching active users: {e}")
         return []
 
 def get_all_workouts(hub_code):
     try:
-        res = supabase.table("Completions").select("*").eq("hub_code", hub_code).order("created_at", descending=True).execute()
+        res = supabase.table("Completions").select("*").eq("hub_code", hub_code).execute()
         return res.data if hasattr(res, 'data') else []
     except Exception as e:
+        st.error(f"Error fetching workouts: {e}")
         return []
 
 def log_workout(name, exercise, sets, reps, weight, duration, rest_time, hub_code, completed=False, video_url=None):
@@ -210,7 +212,7 @@ def log_workout(name, exercise, sets, reps, weight, duration, rest_time, hub_cod
         supabase.table("Completions").insert(payload).execute()
         return True
     except Exception as e:
-        st.error(f"⚠️ Database insertion failed: {e}")
+        st.error(f"⚠️ Database write failure: {e}")
         return False
 
 def delete_workout(workout_id):
@@ -259,9 +261,6 @@ def login_tab():
     if not st.session_state.current_user:
         login_mode = st.radio("Choose Action", ["Sign In / Load Existing Profile", "Register New User Profile"], horizontal=True)
         
-        # ----------------------------------------------------
-        # MODE 1: SECURE SIGN IN (Backend Verified)
-        # ----------------------------------------------------
         if login_mode == "Sign In / Load Existing Profile":
             st.markdown("### Welcome Back! 👋")
             input_name = st.text_input("Enter your Full Name (First Last)", placeholder="e.g. John Doe").strip()
@@ -276,24 +275,14 @@ def login_tab():
                 else:
                     try:
                         res = supabase.table("Completions").select("*").eq("name", input_name).eq("hub_code", target_hub).limit(1).execute()
-                        if hasattr(res, 'data') and len(res.data) > 0:
-                            st.session_state.hub_code = target_hub
-                            st.session_state.current_user = input_name
-                            mark_active(input_name, target_hub)
-                            st.success(f"Profile found! Welcome back to Hub {target_hub}.")
-                            st.rerun()
-                        else:
-                            st.session_state.hub_code = target_hub
-                            st.session_state.current_user = input_name
-                            mark_active(input_name, target_hub)
-                            st.success(f"Welcome to Hub {target_hub}.")
-                            st.rerun()
+                        st.session_state.hub_code = target_hub
+                        st.session_state.current_user = input_name
+                        mark_active(input_name, target_hub)
+                        st.success(f"Welcome to Hub {target_hub}.")
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Account lookup error: {e}")
 
-        # ----------------------------------------------------
-        # MODE 2: REGISTRATION
-        # ----------------------------------------------------
         else:
             col_first, col_last = st.columns(2)
             with col_first:
@@ -302,10 +291,8 @@ def login_tab():
                 last_name = st.text_input("Last Name", key="user_last_name")
                 
             uploaded_file = st.file_uploader("Upload Profile Picture", type=["png", "jpg", "jpeg"], key="user_profile_pic")
-            
             st.markdown("#### Security Setup")
             password_input = st.text_input("Create a Device Password", type="password", key="create_pwd_input")
-                
             st.markdown("#### Enter Hub Code or Create Hub")
             join_hub_code = st.text_input("Enter Hub Code", key="join_hub_input").strip().upper()
             
@@ -338,7 +325,7 @@ def login_tab():
                     try:
                         supabase.table("tasks").insert({
                             "task_name": "Hub Initialized",
-                            "task_date": datetime.utcnow().date().isoformat(),
+                            "task_date": datetime.now(timezone.utc).date().isoformat(),
                             "hub_code": new_code
                         }).execute()
                         st.success(f"🎉 Hub created: **{new_code}**")
@@ -396,7 +383,7 @@ def log_workout_tab():
                 success = log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=False, video_url=uploaded_video_url)
                 if success:
                     mark_active(name.strip(), st.session_state.hub_code)
-                    st.success("Workout logged successfully!")
+                    st.toast("Workout logged successfully! Go check the Dashboard.")
                     st.rerun()
                 
     with btn_col2:
@@ -407,7 +394,7 @@ def log_workout_tab():
                 success = log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=True, video_url=uploaded_video_url)
                 if success:
                     mark_active(name.strip(), st.session_state.hub_code)
-                    st.success("Workout marked as completed!")
+                    st.toast("Workout finished! Check Finished Workouts tab.")
                     st.rerun()
 
 def dashboard_tab():
@@ -426,7 +413,7 @@ def dashboard_tab():
 
     for person, entries in by_person.items():
         total_sets = sum(int(e.get("sets", 0) or 0) for e in entries)
-        with st.expander(f"📋 {person} — Logged Workouts"):
+        with st.expander(f"📋 {person} — Logged Workouts", expanded=True):
             st.write(f"**Total Sets Tracked:** {total_sets}")
             for entry in entries:
                 log_text = f"{entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)"
