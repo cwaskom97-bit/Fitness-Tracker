@@ -215,6 +215,22 @@ def log_workout(name, exercise, sets, reps, weight, duration, rest_time, hub_cod
         st.error(f"⚠️ Database write failure: {e}")
         return False
 
+def finish_latest_workout(name, hub_code):
+    try:
+        # Find the latest open (uncompleted) logged workout for this user in this hub
+        res = supabase.table("Completions").select("id").eq("name", name).eq("hub_code", hub_code).eq("completed", False).order("created_at", descending=True).limit(1).execute()
+        if hasattr(res, 'data') and len(res.data) > 0:
+            latest_id = res.data[0]["id"]
+            # Mark it completed instead of generating a new record entry row
+            supabase.table("Completions").update({"completed": True}).eq("id", latest_id).execute()
+            return True
+        else:
+            st.warning("No uncompleted workout entries found to finalize! Log a workout line first.")
+            return False
+    except Exception as e:
+        st.error(f"⚠️ Database finish failure: {e}")
+        return False
+
 def delete_workout(workout_id):
     try:
         supabase.table("Completions").delete().eq("id", workout_id).execute()
@@ -383,7 +399,7 @@ def log_workout_tab():
                 success = log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=False, video_url=uploaded_video_url)
                 if success:
                     mark_active(name.strip(), st.session_state.hub_code)
-                    st.toast("Workout logged successfully! Go check the Dashboard.")
+                    st.success("Workout Logged!")
                     st.rerun()
                 
     with btn_col2:
@@ -391,10 +407,10 @@ def log_workout_tab():
             if not name.strip():
                 st.error("Please login to your profile first.")
             else:
-                success = log_workout(name.strip(), exercise.strip(), sets, reps, weight, duration, rest_time, st.session_state.hub_code, completed=True, video_url=uploaded_video_url)
+                success = finish_latest_workout(name.strip(), st.session_state.hub_code)
                 if success:
                     mark_active(name.strip(), st.session_state.hub_code)
-                    st.toast("Workout finished! Check Finished Workouts tab.")
+                    st.success("Workout Finished!")
                     st.rerun()
 
 def dashboard_tab():
