@@ -420,7 +420,8 @@ def dashboard_tab():
 
     for person, entries in by_person.items():
         total_sets = sum(int(e.get("sets", 0) or 0) for e in entries)
-        with st.expander(f"{person} — {len(entries)} workouts logged"):
+        # CHANGED: Shows logged workouts on dashboard
+        with st.expander(f"📋 {person} — Logged Workouts"):
             st.write(f"**Total Sets Tracked:** {total_sets}")
             for entry in entries:
                 log_text = f"{entry.get('exercise')}: {entry.get('sets')} sets x {entry.get('reps')} reps @ {entry.get('weight')} lbs (Rest: {entry.get('rest_time', 'N/A')}s)"
@@ -447,7 +448,8 @@ def active_users_tab():
 
     for user in active:
         user_name = user.get("task_name", "Anonymous User")
-        st.write(f" 🔥 **{user_name}** is actively crushing it")
+        # CHANGED: Shows people who are actively on the app
+        st.write(f"📱 **{user_name}** is on the app")
 
 def finished_workouts_tab():
     st.subheader("Finished Workouts")
@@ -471,7 +473,8 @@ def finished_workouts_tab():
         reps = entry.get("reps", 0)
         weight = entry.get("weight", 0.0)
         duration = entry.get("duration", 0.0)
-        st.write(f"🏆 **{person}** finalized workout: **{exercise}** — {sets} sets x {reps} reps @ {weight} lbs ({duration} mins)")
+        # CHANGED: Explicitly shows who completed a routine by hitting "Finish Workout"
+        st.write(f"🏆 **{person}** finished a workout: **{exercise}** — {sets} sets x {reps} reps @ {weight} lbs ({duration} mins)")
 
 def recorded_workouts_tab():
     st.subheader("📼 Recorded Workouts Hub Feed")
