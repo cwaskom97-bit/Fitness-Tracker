@@ -208,6 +208,7 @@ def log_workout(name, exercise, sets, reps, weight, duration, rest_time, hub_cod
             "video_url": video_url
         }).execute()
         st.success("Workout recorded permanently to cloud database!")
+        st.rerun()  # Forces interface layout sync immediately
     except Exception as e:
         st.error(f"Database Error: {e}")
 
@@ -272,7 +273,6 @@ def login_tab():
                 elif not verify_hub_exists(target_hub):
                     st.error("The specified Hub Code does not exist.")
                 else:
-                    # Look up your last workout to pull profile configuration safely
                     try:
                         res = supabase.table("Completions").select("*").eq("name", input_name).eq("hub_code", target_hub).limit(1).execute()
                         if hasattr(res, 'data') and len(res.data) > 0:
@@ -282,7 +282,6 @@ def login_tab():
                             st.success(f"Profile found! Welcome back to Hub {target_hub}.")
                             st.rerun()
                         else:
-                            # Fallback if no logs exist yet, but hub is real
                             st.session_state.hub_code = target_hub
                             st.session_state.current_user = input_name
                             mark_active(input_name, target_hub)
@@ -420,7 +419,7 @@ def dashboard_tab():
 
     for person, entries in by_person.items():
         total_sets = sum(int(e.get("sets", 0) or 0) for e in entries)
-        # CHANGED: Shows logged workouts on dashboard
+        # FIXED: Now strictly formats explicitly as "Logged Workouts" dashboard container
         with st.expander(f"📋 {person} — Logged Workouts"):
             st.write(f"**Total Sets Tracked:** {total_sets}")
             for entry in entries:
@@ -448,8 +447,9 @@ def active_users_tab():
 
     for user in active:
         user_name = user.get("task_name", "Anonymous User")
-        # CHANGED: Shows people who are actively on the app
-        st.write(f"📱 **{user_name}** is on the app")
+        # FIXED: Confirms presence on the client interface dynamically
+        if user_name != "Hub Initialized":
+            st.write(f"📱 **{user_name}** is on the app")
 
 def finished_workouts_tab():
     st.subheader("Finished Workouts")
@@ -461,7 +461,8 @@ def finished_workouts_tab():
         st.info("No finished workouts recorded yet.")
         return
 
-    finished_entries = [w for w in workouts if w.get("completed") is True]
+    # FIXED: Verifies standard truthy checks on 'completed' key pairs
+    finished_entries = [w for w in workouts if w.get("completed") is True or str(w.get("completed")).lower() == 'true']
     if not finished_entries:
         st.info("No workouts finalized using 'Finish Workout' yet.")
         return
@@ -473,7 +474,7 @@ def finished_workouts_tab():
         reps = entry.get("reps", 0)
         weight = entry.get("weight", 0.0)
         duration = entry.get("duration", 0.0)
-        # CHANGED: Explicitly shows who completed a routine by hitting "Finish Workout"
+        # FIXED: Confirms who finished a workout routine explicitly
         st.write(f"🏆 **{person}** finished a workout: **{exercise}** — {sets} sets x {reps} reps @ {weight} lbs ({duration} mins)")
 
 def recorded_workouts_tab():
