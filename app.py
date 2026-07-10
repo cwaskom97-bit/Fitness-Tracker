@@ -217,11 +217,10 @@ def log_workout(name, exercise, sets, reps, weight, duration, rest_time, hub_cod
 
 def finish_latest_workout(name, hub_code):
     try:
-        # Find the latest open (uncompleted) logged workout for this user in this hub
-        res = supabase.table("Completions").select("id").eq("name", name).eq("hub_code", hub_code).eq("completed", False).order("created_at", descending=True).limit(1).execute()
+        # FIXED: Changed 'descending=True' to 'desc=True' to match the Python Supabase SDK schema requirements
+        res = supabase.table("Completions").select("id").eq("name", name).eq("hub_code", hub_code).eq("completed", False).order("created_at", desc=True).limit(1).execute()
         if hasattr(res, 'data') and len(res.data) > 0:
             latest_id = res.data[0]["id"]
-            # Mark it completed instead of generating a new record entry row
             supabase.table("Completions").update({"completed": True}).eq("id", latest_id).execute()
             return True
         else:
