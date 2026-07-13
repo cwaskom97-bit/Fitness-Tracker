@@ -27,6 +27,13 @@ if "theme_mode" not in st.session_state:
     st.session_state.theme_mode = "Dark"
 if "ai_chat_history" not in st.session_state:
     st.session_state.ai_chat_history = []
+if "current_tab_index" not in st.session_state:
+    st.session_state.current_tab_index = 0
+if "trigger_ai_streak_prompt" not in st.session_state:
+    st.session_state.trigger_ai_streak_prompt = False
+
+# Streak configuration rule
+STREAK_THRESHOLD = 3 
 
 # ==========================================
 # 2. APP THEME CONFIGURATION
@@ -217,7 +224,6 @@ def log_workout(name, exercise, sets, reps, weight, duration, rest_time, hub_cod
 
 def finish_latest_workout(name, hub_code):
     try:
-        # FIXED: Changed 'descending=True' to 'desc=True' to match the Python Supabase SDK schema requirements
         res = supabase.table("Completions").select("id").eq("name", name).eq("hub_code", hub_code).eq("completed", False).order("created_at", desc=True).limit(1).execute()
         if hasattr(res, 'data') and len(res.data) > 0:
             latest_id = res.data[0]["id"]
@@ -354,6 +360,7 @@ def login_tab():
             st.session_state.profile_pic = None
             st.session_state.hub_code = None
             st.session_state.ai_chat_history = [] 
+            st.session_state.current_tab_index = 0
             st.success("Logged out successfully.")
             st.rerun()
 
@@ -418,6 +425,54 @@ def dashboard_tab():
         st.rerun()
 
     workouts = get_all_workouts(st.session_state.hub_code)
+    
+    # --- WEEKLY PROGRESS & STREAK CALCULATIONS ---
+    st.markdown("### 📊 Metrics Tracker")
+    user_workouts = [w for w in workouts if str(w.get("name", "")).strip().lower() == str(st.session_state.current_user).strip().lower()]
+    
+    # Calculate Weekly Active Days (Last 7 Days)
+    today = datetime.now(timezone.utc).date()
+    start_of_week = today - timedelta(days=7)
+    
+    workout_dates = set()
+    for w in user_workouts:
+        created_at_str = w.get("created_at")
+        if created_at_str:
+            w_date = datetime.fromisoformat(created_at_str.replace("Z", "+00:00")).date()
+            workout_dates.add(w_date)
+            
+    weekly_days = [start_of_week + timedelta(days=i) for i in range(8)]
+    days_logged_this_week = sum(1 for d in weekly_days if d in workout_dates)
+    
+    # Calculate Current Streak (Consecutive days backward from today)
+    streak = 0
+    check_date = today
+    while check_date in workout_dates:
+        streak += 1
+        check_date -= timedelta(days=1)
+        
+    # If they missed today, check if they have a streak ending yesterday
+    if streak == 0:
+        check_date = today - timedelta(days=1)
+        while check_date in workout_dates:
+            streak += 1
+            check_date -= timedelta(days=1)
+
+    # Display progress metrics
+    m_col1, m_col2 = st.columns(2)
+    m_col1.metric("Weekly Active Days (Past 7d)", f"{days_logged_this_week} Days")
+    m_col2.metric("Current Login Streak 🔥", f"{streak} Days")
+    
+    # Smart Auto-Route trigger to AI Coach
+    if streak >= STREAK_THRESHOLD:
+        st.success(f"🎉 Awesome job! You've achieved a streak of **{streak} days**!")
+        if st.button(f"🚀 Claim Reward Plan from AI Coach", key="ai_streak_route_btn"):
+            st.session_state.trigger_ai_streak_prompt = True
+            st.session_state.current_tab_index = 6 # Changes target to AI Coach tab
+            st.rerun()
+            
+    st.write("---")
+
     if not workouts:
         st.info("No logged workouts found in this Hub.")
         return
@@ -515,14 +570,27 @@ def ai_coach_tab():
         st.session_state.ai_chat_history = []
         st.rerun()
 
+    # Pre-populate custom script behavior for Streak Milestones
+    auto_prompt_content = None
+    if st.session_state.get("trigger_ai_streak_prompt"):
+        st.session_state.trigger_ai_streak_prompt = False
+        auto_prompt_content = "I unlocked my streak milestone! Please generate my custom workout routine and advise me on what to drink for optimal recovery."
+        st.session_state.ai_chat_history.append({"role": "user", "content": auto_prompt_content})
+
     for msg in st.session_state.ai_chat_history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if user_prompt := st.chat_input("Ask your AI Coach anything..."):
-        with st.chat_message("user"):
-            st.markdown(user_prompt)
-        st.session_state.ai_chat_history.append({"role": "user", "content": user_prompt})
+    # Define operational prompt execution block
+    user_prompt = st.chat_input("Ask your AI Coach anything...")
+    if auto_prompt_content:
+        user_prompt = auto_prompt_content
+
+    if user_prompt:
+        if not auto_prompt_content:
+            with st.chat_message("user"):
+                st.markdown(user_prompt)
+            st.session_state.ai_chat_history.append({"role": "user", "content": user_prompt})
 
         with st.chat_message("assistant"):
             response_placeholder = st.empty()
@@ -530,7 +598,8 @@ def ai_coach_tab():
             
             system_instruction = (
                 f"You are a professional personal fitness coach agent for the app 'RunItBack'. "
-                f"You are currently speaking to {st.session_state.current_user}. Provide elite level workout guidance."
+                f"You are currently speaking to {st.session_state.current_user}. Provide elite level workout guidance. "
+                f"If the user mentions a streak milestone, congratulate them enthusiastically, give them a detailed workout routine, and provide dynamic nutritional drink options."
             )
             
             try:
@@ -556,6 +625,8 @@ def ai_coach_tab():
                 
                 response_placeholder.markdown(full_response)
                 st.session_state.ai_chat_history.append({"role": "assistant", "content": full_response})
+                if auto_prompt_content:
+                    st.rerun()
                 
             except Exception as e:
                 st.error(f"Gemini API Error: {str(e)}")
@@ -569,7 +640,10 @@ if st.session_state.current_user is None:
         login_tab()
         st.warning("Please sign in or register to unlock tracking tabs.")
 else:
+    # Managed tabs via active session states to control dynamic redirection behavior
     tabs = st.tabs(["Hub Options", "Log Workout", "Dashboard", "Active Users", "Finished Workouts", "Recorded Workouts", "AI Coach 🤖"])
+    
+    # Store dynamic selection updates back into indexing state patterns
     with tabs[0]: login_tab()
     with tabs[1]: log_workout_tab()
     with tabs[2]: dashboard_tab()
